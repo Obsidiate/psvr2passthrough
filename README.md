@@ -38,7 +38,7 @@ Intended targets: DCS World, and other OpenXR compatible titles.
 - Refinement on theses default values is not completed. Expected iteration of this rapidly in coming weeks. It may feel slightly "off" in a hard to articulate way compared to native passthrough. 
 - There is currently no built in version check/update prompt.
 
-## Build (skip this if downloading 0.1 release)
+## Build (skip this step if downloading a zipped/packaged release)
 
 Requirements:
 - Windows 10/11, Visual Studio 2022 (MSVC v143)
