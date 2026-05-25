@@ -20,6 +20,9 @@ Intended targets: DCS World, MSFS 2024, iRacing, and any other SteamVR OpenXR ti
    binding (keyboard key, XInput gamepad button, or DirectInput HOTAS/joystick button) in
    either hold-to-show or toggle mode. Passthrough can also be forced always-on for
    calibration.
+5. **Quad-views compatible** — tested and primarily iterated in DCS World.
+6. **OBS recording / mirror layer compatible**
+7. **OpenKneeboard compatible**
 
 ## What this is NOT
 
@@ -94,6 +97,14 @@ layer activates automatically.
 - Lower cameras only — roughly sternum-height and below.
 - Grayscale output.
 - D3D11 host-app graphics only. D3D12/Vulkan apps see the layer go inert.
+
+## Attributions
+
+- **[PSVR2Camera](https://github.com/realSupremium/PSVR2Camera)** by realSupremium — shared memory layout, IPC object naming, and calibration data offsets for the PSVR2 driver interface. This project would not exist without that reverse-engineering work.
+- **[OpenKneeboard](https://github.com/OpenKneeboard/OpenKneeboard)** by Fred Emmott — reference for DirectInput device enumeration and background (non-exclusive) binding in an OpenXR layer context.
+- **[Dear ImGui](https://github.com/ocornut/imgui)** by Omar Cornut — immediate-mode GUI library used for the configuration app.
+- **[spdlog](https://github.com/gabime/spdlog)** / **[fmt](https://github.com/fmtlib/fmt)** — logging and string formatting.
+- **[Khronos OpenXR SDK](https://github.com/KhronosGroup/OpenXR-SDK)** — OpenXR loader and headers.
 
 ## Licence
 
