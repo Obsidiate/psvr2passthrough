@@ -2,9 +2,16 @@
 # SteamVR's embedded OpenXR runtime only reads HKLM (not HKCU) for implicit
 # layers, so admin access is required. The script self-elevates if needed.
 
-param(
-    [string]$ManifestPath = "$PSScriptRoot\..\build\src\layer\Release\PSVR2PassthroughLayer.json"
-)
+param([string]$ManifestPath = "")
+
+# Discover manifest: alongside this script (release layout) or in the build tree (dev layout).
+if (-not $ManifestPath) {
+    if (Test-Path "$PSScriptRoot\PSVR2PassthroughLayer.json") {
+        $ManifestPath = "$PSScriptRoot\PSVR2PassthroughLayer.json"
+    } else {
+        $ManifestPath = "$PSScriptRoot\..\build\src\layer\Release\PSVR2PassthroughLayer.json"
+    }
+}
 
 # Self-elevate to admin if not already running elevated.
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(

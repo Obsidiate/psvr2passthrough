@@ -1,9 +1,16 @@
 # Removes the PSVR2 Passthrough Layer from both HKLM and HKCU implicit layer
 # registries. Self-elevates to admin to handle the HKLM entry.
 
-param(
-    [string]$ManifestPath = "$PSScriptRoot\..\build\src\layer\Release\PSVR2PassthroughLayer.json"
-)
+param([string]$ManifestPath = "")
+
+# Discover manifest: alongside this script (release layout) or in the build tree (dev layout).
+if (-not $ManifestPath) {
+    if (Test-Path "$PSScriptRoot\PSVR2PassthroughLayer.json") {
+        $ManifestPath = "$PSScriptRoot\PSVR2PassthroughLayer.json"
+    } else {
+        $ManifestPath = "$PSScriptRoot\..\build\src\layer\Release\PSVR2PassthroughLayer.json"
+    }
+}
 
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
         [Security.Principal.WindowsBuiltInRole]::Administrator)) {
