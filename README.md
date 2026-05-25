@@ -5,7 +5,7 @@
 An OpenXR implicit API layer that injects real-time stereo passthrough from the PSVR2's
 built-in bottom cameras into any OpenXR application running under SteamVR on PC.
 
-Intended targets: DCS World, MSFS 2024, iRacing, and any other SteamVR OpenXR title.
+Intended targets: DCS World, and other OpenXR compatible titles. 
 
 ## What it does
 
