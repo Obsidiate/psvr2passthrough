@@ -1,5 +1,7 @@
 # Changelog
 
+### This is not expected to be perfect 1:1 of in headset passthrough at this Alpha stage but it is veeeeery usable. 
+
 ## v0.2-alpha
 
 **Per-eye geometry calibration**
