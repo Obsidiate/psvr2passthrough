@@ -61,20 +61,22 @@ Output:
 ## Install
 
 ```powershell
-.\scripts\install_layer.ps1   # run as admin
+install_layer.ps1   # run as admin
 ```
 
 Registers the layer under
 `HKLM\Software\Khronos\OpenXR\1\ApiLayers\Implicit` so it loads automatically
-for every OpenXR application. To uninstall:
+for every OpenXR application. 
+
+To uninstall:
 
 ```powershell
-.\scripts\uninstall_layer.ps1
+uninstall_layer.ps1
 ```
 
 ## Configuration
 
-Run `PSVR2PassthroughConfig.exe` to configure the layer. The GUI provides:
+YOU MUST Run `PSVR2PassthroughConfig.exe` to configure the binding to show the layer. The GUI provides:
 
 - Master on/off switch and force-passthrough debug toggle
 - Opacity control
