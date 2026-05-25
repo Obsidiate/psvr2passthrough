@@ -35,7 +35,7 @@ Intended targets: DCS World, and other OpenXR compatible titles.
 - The passthrough camera feeds are passed over USB and are a compressed feed at a lower framerate versus the in headset native view, with a resultant drop in quality and potentially higher "VR legs/nausea" effect. Fine for reaching for panels, not so much for "mixed reality" use at this stage. 
 - There are mathematical aspects to the undistortion model that may not be exposed to the PC in shared memory that are translated directly in the pipeline from camera > in headset passthrough view. Research continues.
 - A configuration gui has been provided to tweak some values as a result of minor differences between headsets, such as camera rotation. 
-- Refinement on theses default values is not completed. Expected iteration of this rapidly in coming weeks.
+- Refinement on theses default values is not completed. Expected iteration of this rapidly in coming weeks. It may feel slightly "off" in a hard to articulate way compared to native passthrough. 
 - There is currently no built in version check/update prompt.
 
 ## Build (skip this if downloading 0.1 release)
