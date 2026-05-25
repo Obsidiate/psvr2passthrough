@@ -26,6 +26,15 @@ Intended targets: DCS World, MSFS 2024, iRacing, and any other SteamVR OpenXR ti
 - **OBS recording / mirror layer compatible**
 - **OpenKneeboard compatible**
 
+## Known Limitations
+
+- The camera feeds are passed over USB and are a compressed feed at a lower framerate versus the in headset native view, with a resultant drop in quality and potentially higher "VR legs/nausea" effect. Fine for reaching for panels, not for "mixed reality" use.
+- There are mathematical aspects to the undistortion model that may not be exposed to the PC in shared memory that are translated directly in the pipeline from camera > in headset passthrough view. Research continues.
+- A configuration gui has been provided to tweak some values as a result of minor differences between headsets, such as camera rotation.
+- Refinement on theses default values is not completed. Expected iteration of this rapidly in coming weeks.
+- ~30-60 Hz camera feed vs 90/120 Hz game rendering — passthrough will lag fast head motion slightly.
+- D3D11 host-app graphics only.
+
 ## Features
 
 - Button-gated passthrough: keyboard keys, XInput gamepad buttons, DirectInput HOTAS/joystick buttons
@@ -101,14 +110,6 @@ layer activates automatically.
 ## Log file
 
 `%LOCALAPPDATA%\PSVR2PassthroughLayer\layer.log` — truncated on each launch.
-
-## Known limitations
-
-- 60 Hz camera feed vs 90/120 Hz game rendering — passthrough will lag fast head
-  motion slightly.
-- Lower cameras only — roughly sternum-height and below.
-- Grayscale output.
-- D3D11 host-app graphics only. D3D12/Vulkan apps see the layer go inert.
 
 ## Attributions
 
