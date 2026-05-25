@@ -1,5 +1,7 @@
 # PSVR2 Passthrough Layer
 
+**_### I EXPECT 0.1 TO BE SLIGHTLY VISUALLY BROKEN FOR YOU, THIS IS AN ALPHA PROOF OF CONCEPT_**
+
 An OpenXR implicit API layer that injects real-time stereo passthrough from the PSVR2's
 built-in bottom cameras into any OpenXR application running under SteamVR on PC.
 
