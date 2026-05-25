@@ -25,7 +25,7 @@ Intended targets: DCS World, MSFS 2024, iRacing, and any other SteamVR OpenXR ti
 - It does **not** support the top two PSVR2 cameras — Sony does not expose them to PC.
 - It does **not** modify game files or inject into game processes.
 
-## Build
+## Build (skip this if downloading 0.1 release)
 
 Requirements:
 - Windows 10/11, Visual Studio 2022 (MSVC v143)
