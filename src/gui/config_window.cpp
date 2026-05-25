@@ -188,7 +188,7 @@ void ConfigWindow::draw_main_panel() {
     // -----------------------------------------------------------------------
     ImGui::SeparatorText("Camera image");
     ImGui::SliderFloat("Brightness", &working_.brightness, 0.5f, 4.0f, "%.2f");
-    ImGui::TextDisabled("Boost to match native passthrough brightness. Default 1.0.");
+    ImGui::TextDisabled("Boost to match native passthrough brightness. Default 1.3.");
     ImGui::Checkbox("Apply lens undistortion", &working_.apply_undistortion);
     ImGui::SliderFloat("Zoom factor", &working_.zoom_factor, 0.5f, 4.0f, "%.2f");
     ImGui::TextDisabled("Higher zoom = narrower FOV, fewer lens artefacts at edges.");

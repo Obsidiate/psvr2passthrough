@@ -13,7 +13,7 @@ struct Config {
 
     // Passthrough appearance.
     float global_alpha         = 1.0f;   // transparency [0..1] — 1 = fully opaque
-    float brightness           = 1.0f;   // luminance multiplier [0.5..4.0]
+    float brightness           = 1.3f;   // luminance multiplier [0.5..4.0]
 
     // Debug override — ignores binding entirely, passthrough always visible.
     bool force_passthrough_on = false;
