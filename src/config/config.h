@@ -29,12 +29,16 @@ struct Config {
     bool  apply_undistortion   = true;
     float zoom_factor          = 1.0f;
 
-    // Camera stereo geometry corrections (see handoff_handtracking.md for details).
-    float camera_toe_out_rad   = 0.32f;
-    float camera_tilt_down_rad = 0.48f;
-    float camera_roll_rad      = -0.1745f;
-
-
+    // Camera stereo geometry corrections.
+    // When camera_eyes_linked is true the right-eye values are derived from the
+    // left-eye values (toe/roll negated, tilt copied) and are not saved separately.
+    bool  camera_eyes_linked    = true;
+    float camera_toe_out_rad_l  =  0.32f;
+    float camera_tilt_down_rad_l =  0.48f;
+    float camera_roll_rad_l     = -0.1745f;
+    float camera_toe_out_rad_r  = -0.32f;
+    float camera_tilt_down_rad_r =  0.48f;
+    float camera_roll_rad_r     =  0.1745f;
 };
 
 // JSON serialisation.

@@ -227,24 +227,22 @@ void Compositor::upload_frame(const StereoFrame& frame) {
 void Compositor::render(const CompositorConfig& cfg) {
     if (!ready_) return;
 
-    static float last_zoom   = -1.f;
-    static bool  last_undist = !cfg.apply_undistortion;
-    static float last_toe    = -999.f;
-    static float last_tilt   = -999.f;
-    static float last_roll   = -999.f;
-    if (last_zoom != cfg.zoom_factor || last_undist != cfg.apply_undistortion ||
-        last_toe  != cfg.camera_toe_out_rad  ||
-        last_tilt != cfg.camera_tilt_down_rad ||
-        last_roll != cfg.camera_roll_rad) {
+    static float last_zoom    = -1.f;
+    static bool  last_undist  = !cfg.apply_undistortion;
+    static float last_toe_l   = -999.f, last_tilt_l = -999.f, last_roll_l = -999.f;
+    static float last_toe_r   = -999.f, last_tilt_r = -999.f, last_roll_r = -999.f;
+    if (last_zoom   != cfg.zoom_factor          ||
+        last_undist != cfg.apply_undistortion   ||
+        last_toe_l  != cfg.camera_toe_out_rad_l || last_tilt_l != cfg.camera_tilt_down_rad_l || last_roll_l != cfg.camera_roll_rad_l ||
+        last_toe_r  != cfg.camera_toe_out_rad_r || last_tilt_r != cfg.camera_tilt_down_rad_r || last_roll_r != cfg.camera_roll_rad_r) {
         rebuild_mesh_(0, cfg.zoom_factor, cfg.apply_undistortion,
-                      +cfg.camera_toe_out_rad, cfg.camera_tilt_down_rad, +cfg.camera_roll_rad);
+                      cfg.camera_toe_out_rad_l, cfg.camera_tilt_down_rad_l, cfg.camera_roll_rad_l);
         rebuild_mesh_(1, cfg.zoom_factor, cfg.apply_undistortion,
-                      -cfg.camera_toe_out_rad, cfg.camera_tilt_down_rad, -cfg.camera_roll_rad);
+                      cfg.camera_toe_out_rad_r, cfg.camera_tilt_down_rad_r, cfg.camera_roll_rad_r);
         last_zoom   = cfg.zoom_factor;
         last_undist = cfg.apply_undistortion;
-        last_toe    = cfg.camera_toe_out_rad;
-        last_tilt   = cfg.camera_tilt_down_rad;
-        last_roll   = cfg.camera_roll_rad;
+        last_toe_l  = cfg.camera_toe_out_rad_l; last_tilt_l = cfg.camera_tilt_down_rad_l; last_roll_l = cfg.camera_roll_rad_l;
+        last_toe_r  = cfg.camera_toe_out_rad_r; last_tilt_r = cfg.camera_tilt_down_rad_r; last_roll_r = cfg.camera_roll_rad_r;
     }
 
     const float clear[4]{ 0, 0, 0, 0 };

@@ -1,6 +1,6 @@
 # PSVR2 Passthrough Layer
 
-**_### I EXPECT 0.1 TO BE SLIGHTLY VISUALLY BROKEN FOR YOU, THIS IS AN ALPHA PROOF OF CONCEPT_**
+**Alpha software — geometry alignment requires manual calibration per headset. See Configuration below.**
 
 An OpenXR implicit API layer that injects real-time stereo passthrough from the PSVR2's
 built-in bottom cameras into any OpenXR application running under SteamVR on PC.
@@ -13,8 +13,8 @@ Intended targets: DCS World, MSFS 2024, iRacing, and any other SteamVR OpenXR ti
    shared-memory interface. No helper process required; the layer talks to the driver directly.
 2. **Lens undistortion** — applies the per-eye calibration coefficients provided by the driver.
 3. **Stereo geometry correction** — corrects for the cameras' physical mounting angle
-   (toe-out, tilt-down, roll) via a baked rectification mesh. Pre-tuned to match the native
-   PSVR2 passthrough alignment; all three values are live-adjustable in the config GUI.
+   (toe-out, tilt-down, roll) via a baked rectification mesh. Adjustable per-eye in the
+   config GUI; paired (symmetric) adjustment is the default.
 4. **Button-gated compositing** — intercepts `xrEndFrame` and injects an
    `XrCompositionLayerProjection` per eye. Visibility is controlled by a user-configured
    binding (keyboard key, XInput gamepad button, or DirectInput HOTAS/joystick button) in
@@ -27,7 +27,7 @@ Intended targets: DCS World, MSFS 2024, iRacing, and any other SteamVR OpenXR ti
 - It does **not** support the top two PSVR2 cameras — Sony does not expose them to PC.
 - It does **not** modify game files or inject into game processes.
 
-## Build (skip this if downloading 0.1 release)
+## Build (skip this if downloading a release package)
 
 Requirements:
 - Windows 10/11, Visual Studio 2022 (MSVC v143)
@@ -69,7 +69,8 @@ Run `PSVR2PassthroughConfig.exe` to configure the layer. The GUI provides:
 - Button binding capture (keyboard, XInput gamepad, DirectInput HOTAS/joystick)
   with hold-to-show or toggle-on/off mode
 - Lens undistortion toggle and zoom control
-- Stereo geometry sliders (toe-out, tilt-down, roll)
+- Per-eye stereo geometry sliders (toe-out, tilt-down, roll) in degrees, with paired or independent adjustment
+- Headset intrinsics display (fx, fy, cx, cy read from the PSVR2 driver)
 
 Settings are saved to `%LOCALAPPDATA%\PSVR2PassthroughLayer\config.json` and
 take effect on the next sim launch.

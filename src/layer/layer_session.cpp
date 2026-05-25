@@ -3,7 +3,6 @@
 #include "logging.h"
 
 #include <cmath>
-#include <algorithm>
 
 namespace psvr2pt {
 
@@ -94,6 +93,7 @@ bool LayerSession::ensure_swapchain_(uint32_t width, uint32_t height) {
         PT_LOG_ERROR("Compositor failed to initialise");
         return false;
     }
+
     return true;
 }
 

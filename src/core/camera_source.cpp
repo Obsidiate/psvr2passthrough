@@ -4,6 +4,9 @@
 
 #include <chrono>
 #include <cstring>
+#include <ctime>
+#include <fstream>
+#include <iomanip>
 
 namespace psvr2pt {
 
@@ -84,6 +87,56 @@ bool CameraSource::start() {
                         eye, params_[eye].coeffs[0], params_[eye].coeffs[1],
                         params_[eye].coeffs[2], params_[eye].coeffs[3]);
         }
+    }
+
+    // Write calibration_dump.txt — created fresh each session so it always
+    // reflects the current headset.
+    try {
+        const auto dump_path = get_layer_data_dir() / "calibration_dump.txt";
+        std::ofstream f(dump_path, std::ios::out | std::ios::trunc);
+        f << std::fixed;
+
+        // Timestamp header
+        std::time_t now = std::time(nullptr);
+        char tbuf[32]{};
+        std::strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S", std::localtime(&now));
+        f << "# PSVR2 Passthrough Layer — Camera Calibration Dump\n";
+        f << "# Generated: " << tbuf << "\n\n";
+
+        // Factory intrinsics
+        f << "=== Factory Intrinsics ===\n";
+        f << std::left
+          << std::setw(5)  << "Eye"
+          << std::setw(14) << "fx"
+          << std::setw(14) << "fy"
+          << std::setw(14) << "cx"
+          << std::setw(14) << "cy" << "\n";
+        for (int eye = 0; eye < 2; ++eye) {
+            f << std::setw(5)  << eye
+              << std::setw(14) << std::setprecision(4) << intrinsics_[eye].fx
+              << std::setw(14) << intrinsics_[eye].fy
+              << std::setw(14) << intrinsics_[eye].cx
+              << std::setw(14) << intrinsics_[eye].cy << "\n";
+        }
+        f << "\n";
+
+        // Distortion coefficients
+        f << "=== Distortion Coefficients (20 per eye) ===\n";
+        for (int eye = 0; eye < 2; ++eye) {
+            f << "Eye " << eye << ":\n";
+            for (int j = 0; j < 20; ++j) {
+                f << "  k" << std::setw(2) << std::left << j << " = "
+                  << std::setprecision(10) << std::setw(18) << params_[eye].coeffs[j];
+                if (j % 4 == 3) f << "\n";
+            }
+            if (20 % 4 != 0) f << "\n";
+            f << "\n";
+        }
+
+        f.flush();
+        PT_LOG_INFO("CameraSource: calibration dump started at {}", dump_path.string());
+    } catch (const std::exception& e) {
+        PT_LOG_WARN("CameraSource: failed to write calibration dump: {}", e.what());
     }
 
     const size_t r8_size = static_cast<size_t>(kCameraWidth) * kCameraHeight;

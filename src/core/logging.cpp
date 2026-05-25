@@ -9,7 +9,7 @@
 
 namespace psvr2pt {
 
-static std::filesystem::path get_log_dir() {
+std::filesystem::path get_layer_data_dir() {
     PWSTR path = nullptr;
     if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &path))) {
         std::filesystem::path dir = path;
@@ -28,7 +28,7 @@ void init_logging() {
     initialised = true;
 
     try {
-        const auto log_path = get_log_dir() / "layer.log";
+        const auto log_path = get_layer_data_dir() / "layer.log";
 
         std::vector<spdlog::sink_ptr> sinks;
         sinks.emplace_back(std::make_shared<spdlog::sinks::basic_file_sink_mt>(

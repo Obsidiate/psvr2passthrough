@@ -1,6 +1,6 @@
 {
     "name": "psvr2-passthrough-layer",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "OpenXR API layer providing full passthrough video on PSVR2 PC adapter",
     "dependencies": [
         "openxr-loader",

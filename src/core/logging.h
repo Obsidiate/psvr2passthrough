@@ -1,6 +1,7 @@
 #pragma once
 
 #include <spdlog/spdlog.h>
+#include <filesystem>
 #include <memory>
 
 namespace psvr2pt {
@@ -8,6 +9,9 @@ namespace psvr2pt {
 // Initialise once at layer load. Writes to %LOCALAPPDATA%\PSVR2PassthroughLayer\layer.log
 // plus, in debug builds, OutputDebugString.
 void init_logging();
+
+// Returns %LOCALAPPDATA%\PSVR2PassthroughLayer\ (created if absent).
+std::filesystem::path get_layer_data_dir();
 
 inline auto& log() {
     static auto logger = spdlog::default_logger();

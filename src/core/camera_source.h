@@ -2,6 +2,7 @@
 
 #include "frame.h"
 #include "distortion.h"
+#include "shared_memory.h"
 
 #include <atomic>
 #include <thread>

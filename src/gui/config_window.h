@@ -38,6 +38,8 @@ private:
 
     ID3D11Device*        device_ = nullptr;
     ID3D11DeviceContext* ctx_    = nullptr;
+
+    std::string intrinsics_text_;   // cached snippet from calibration_dump.txt
 };
 
 }  // namespace psvr2pt

@@ -184,13 +184,16 @@ XrResult XRAPI_CALL pt_xrCreateSession(XrInstance instance,
         // Apply the configuration we loaded at instance creation. Knobs are
         // captured once and used for the lifetime of this session.
         auto& cc = state->session->config();
-        cc.global_alpha         = state->config.global_alpha;
-        cc.brightness           = state->config.brightness;
-        cc.apply_undistortion   = state->config.apply_undistortion;
-        cc.zoom_factor          = state->config.zoom_factor;
-        cc.camera_toe_out_rad   = state->config.camera_toe_out_rad;
-        cc.camera_tilt_down_rad = state->config.camera_tilt_down_rad;
-        cc.camera_roll_rad      = state->config.camera_roll_rad;
+        cc.global_alpha             = state->config.global_alpha;
+        cc.brightness               = state->config.brightness;
+        cc.apply_undistortion       = state->config.apply_undistortion;
+        cc.zoom_factor              = state->config.zoom_factor;
+        cc.camera_toe_out_rad_l     = state->config.camera_toe_out_rad_l;
+        cc.camera_tilt_down_rad_l   = state->config.camera_tilt_down_rad_l;
+        cc.camera_roll_rad_l        = state->config.camera_roll_rad_l;
+        cc.camera_toe_out_rad_r     = state->config.camera_toe_out_rad_r;
+        cc.camera_tilt_down_rad_r   = state->config.camera_tilt_down_rad_r;
+        cc.camera_roll_rad_r        = state->config.camera_roll_rad_r;
         state->session->set_passthrough_binding(state->config.passthrough_binding);
         state->session->set_toggle_mode(state->config.toggle_mode);
         state->session->set_force_on(state->config.force_passthrough_on);

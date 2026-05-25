@@ -5,6 +5,8 @@
 #include <filesystem>
 #include <fstream>
 #include <cstring>
+#include <cmath>
+#include <sstream>
 
 namespace psvr2pt {
 
@@ -22,11 +24,15 @@ bool configs_equal(const Config& a, const Config& b) {
         && a.passthrough_binding.xinput_button_mask == b.passthrough_binding.xinput_button_mask
         && a.passthrough_binding.dinput_device_guid == b.passthrough_binding.dinput_device_guid
         && a.passthrough_binding.dinput_button_index== b.passthrough_binding.dinput_button_index
-        && a.apply_undistortion  == b.apply_undistortion
-        && a.zoom_factor         == b.zoom_factor
-        && a.camera_toe_out_rad  == b.camera_toe_out_rad
-        && a.camera_tilt_down_rad== b.camera_tilt_down_rad
-        && a.camera_roll_rad     == b.camera_roll_rad;
+        && a.apply_undistortion       == b.apply_undistortion
+        && a.zoom_factor              == b.zoom_factor
+        && a.camera_eyes_linked       == b.camera_eyes_linked
+        && a.camera_toe_out_rad_l     == b.camera_toe_out_rad_l
+        && a.camera_tilt_down_rad_l   == b.camera_tilt_down_rad_l
+        && a.camera_roll_rad_l        == b.camera_roll_rad_l
+        && a.camera_toe_out_rad_r     == b.camera_toe_out_rad_r
+        && a.camera_tilt_down_rad_r   == b.camera_tilt_down_rad_r
+        && a.camera_roll_rad_r        == b.camera_roll_rad_r;
 }
 
 }  // namespace
@@ -190,13 +196,100 @@ void ConfigWindow::draw_main_panel() {
 
     // -----------------------------------------------------------------------
     ImGui::SeparatorText("Stereo geometry calibration");
-    ImGui::TextDisabled("Pre-set: toe=0.32, tilt=0.48, roll=-0.1745 (matches PSVR2 native).");
-    ImGui::SliderFloat("Toe-out (rad)",  &working_.camera_toe_out_rad,   0.0f, 0.8f, "%.4f");
-    ImGui::TextDisabled("Outward rotation per eye. Too high = cross-eyed. Too low = wall-eyed.");
-    ImGui::SliderFloat("Tilt down (rad)",&working_.camera_tilt_down_rad, 0.0f, 0.8f, "%.4f");
-    ImGui::TextDisabled("Corrects cameras pointing downward. Higher = more upward shift.");
-    ImGui::SliderFloat("Roll (rad)",     &working_.camera_roll_rad,      -0.4f, 0.4f, "%.4f");
-    ImGui::TextDisabled("Corrects physical camera twist. Negative = CCW correction.");
+    {
+        static constexpr float kR2D = 180.f / 3.14159265f;
+        static constexpr float kD2R = 3.14159265f / 180.f;
+
+        if (working_.camera_eyes_linked) {
+            if (ImGui::Button("Unlock eyes"))
+                working_.camera_eyes_linked = false;
+            ImGui::SameLine();
+            ImGui::TextDisabled("Both eyes adjust symmetrically.");
+
+            float toe_deg  =  working_.camera_toe_out_rad_l * kR2D;
+            float tilt_deg =  working_.camera_tilt_down_rad_l * kR2D;
+            float roll_deg =  working_.camera_roll_rad_l * kR2D;
+            bool changed = false;
+            changed |= ImGui::SliderFloat("Toe-out (deg)",  &toe_deg,  0.0f,  45.8f, "%.1f");
+            ImGui::TextDisabled("Outward rotation per eye. Too high = cross-eyed. Too low = wall-eyed.");
+            changed |= ImGui::SliderFloat("Tilt down (deg)", &tilt_deg, 0.0f,  45.8f, "%.1f");
+            ImGui::TextDisabled("Corrects cameras pointing downward. Higher = more upward shift.");
+            changed |= ImGui::SliderFloat("Roll (deg)",      &roll_deg, -22.9f, 22.9f, "%.1f");
+            ImGui::TextDisabled("Corrects physical camera twist. Negative = CCW correction.");
+            if (changed) {
+                working_.camera_toe_out_rad_l   =  toe_deg  * kD2R;
+                working_.camera_tilt_down_rad_l =  tilt_deg * kD2R;
+                working_.camera_roll_rad_l      =  roll_deg * kD2R;
+                working_.camera_toe_out_rad_r   = -toe_deg  * kD2R;
+                working_.camera_tilt_down_rad_r =  tilt_deg * kD2R;
+                working_.camera_roll_rad_r      = -roll_deg * kD2R;
+            }
+        } else {
+            if (ImGui::Button("Lock eyes")) {
+                // Re-lock: mirror left eye to right eye.
+                working_.camera_toe_out_rad_r   = -working_.camera_toe_out_rad_l;
+                working_.camera_tilt_down_rad_r =  working_.camera_tilt_down_rad_l;
+                working_.camera_roll_rad_r      = -working_.camera_roll_rad_l;
+                working_.camera_eyes_linked = true;
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled("Eyes adjust independently. Re-lock mirrors left to right.");
+            ImGui::Spacing();
+
+            if (ImGui::BeginTable("eye_sliders", 3,
+                    ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthStretch, 0.28f);
+                ImGui::TableSetupColumn("Left eye", ImGuiTableColumnFlags_WidthStretch, 0.36f);
+                ImGui::TableSetupColumn("Right eye", ImGuiTableColumnFlags_WidthStretch, 0.36f);
+                ImGui::TableHeadersRow();
+
+                // Toe-out row
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0); ImGui::TextUnformatted("Toe-out (deg)");
+                ImGui::TableSetColumnIndex(1);
+                { float v = working_.camera_toe_out_rad_l * kR2D;
+                  ImGui::SetNextItemWidth(-1.f);
+                  if (ImGui::SliderFloat("##toe_l", &v, -45.8f, 45.8f, "%.1f"))
+                      working_.camera_toe_out_rad_l = v * kD2R; }
+                ImGui::TableSetColumnIndex(2);
+                { float v = working_.camera_toe_out_rad_r * kR2D;
+                  ImGui::SetNextItemWidth(-1.f);
+                  if (ImGui::SliderFloat("##toe_r", &v, -45.8f, 45.8f, "%.1f"))
+                      working_.camera_toe_out_rad_r = v * kD2R; }
+
+                // Tilt down row
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0); ImGui::TextUnformatted("Tilt down (deg)");
+                ImGui::TableSetColumnIndex(1);
+                { float v = working_.camera_tilt_down_rad_l * kR2D;
+                  ImGui::SetNextItemWidth(-1.f);
+                  if (ImGui::SliderFloat("##tilt_l", &v, 0.0f, 45.8f, "%.1f"))
+                      working_.camera_tilt_down_rad_l = v * kD2R; }
+                ImGui::TableSetColumnIndex(2);
+                { float v = working_.camera_tilt_down_rad_r * kR2D;
+                  ImGui::SetNextItemWidth(-1.f);
+                  if (ImGui::SliderFloat("##tilt_r", &v, 0.0f, 45.8f, "%.1f"))
+                      working_.camera_tilt_down_rad_r = v * kD2R; }
+
+                // Roll row
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0); ImGui::TextUnformatted("Roll (deg)");
+                ImGui::TableSetColumnIndex(1);
+                { float v = working_.camera_roll_rad_l * kR2D;
+                  ImGui::SetNextItemWidth(-1.f);
+                  if (ImGui::SliderFloat("##roll_l", &v, -22.9f, 22.9f, "%.1f"))
+                      working_.camera_roll_rad_l = v * kD2R; }
+                ImGui::TableSetColumnIndex(2);
+                { float v = working_.camera_roll_rad_r * kR2D;
+                  ImGui::SetNextItemWidth(-1.f);
+                  if (ImGui::SliderFloat("##roll_r", &v, -22.9f, 22.9f, "%.1f"))
+                      working_.camera_roll_rad_r = v * kD2R; }
+
+                ImGui::EndTable();
+            }
+            ImGui::TextDisabled("Toe/roll: positive = camera rotates outward. Tilt: positive = camera tilts down.");
+        }
+    }
     ImGui::Spacing();
 
 }
@@ -231,6 +324,38 @@ void ConfigWindow::draw_about_panel() {
         "Passthrough button binding supports keyboard keys, Xbox/gamepad "
         "buttons (XInput), and any HOTAS or joystick (DirectInput) — no "
         "intermediate mapping required.");
+    ImGui::Spacing();
+
+    // Lazy-load intrinsics from the calibration dump written by the layer DLL.
+    if (intrinsics_text_.empty()) {
+        const auto dump_path = config_file_path().parent_path() / "calibration_dump.txt";
+        std::ifstream f(dump_path);
+        if (f) {
+            std::ostringstream ss;
+            std::string line;
+            bool in_section = false;
+            while (std::getline(f, line)) {
+                if (line.find("=== Factory Intrinsics ===") != std::string::npos) {
+                    in_section = true;
+                }
+                if (in_section) {
+                    ss << line << "\n";
+                    // Stop after the two eye data rows (header + 2 data lines = 3 lines after title)
+                    if (in_section && line.size() > 0 && line[0] == '1') break;
+                }
+            }
+            intrinsics_text_ = ss.str();
+            if (intrinsics_text_.empty())
+                intrinsics_text_ = "Values available after first sim run.";
+        } else {
+            intrinsics_text_ = "Values available after first sim run.";
+        }
+    }
+
+    ImGui::SeparatorText("Headset intrinsics");
+    ImGui::TextDisabled("Read from PSVR2 driver at last session start.");
+    ImGui::Spacing();
+    ImGui::TextUnformatted(intrinsics_text_.c_str());
 }
 
 

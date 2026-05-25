@@ -91,11 +91,15 @@ std::string config_to_json(const Config& c) {
     os << "  \"pt_di_guid\":          \"" << c.passthrough_binding.dinput_device_guid << "\",\n";
     os << "  \"pt_di_btn\":           " << c.passthrough_binding.dinput_button_index << ",\n";
     os << "  \"pt_di_name\":          \"" << c.passthrough_binding.dinput_device_name << "\",\n";
-    os << "  \"apply_undistortion\":   " << (c.apply_undistortion ? "true" : "false") << ",\n";
-    os << "  \"zoom_factor\":          " << fmt_float(c.zoom_factor) << ",\n";
-    os << "  \"camera_toe_out_rad\":   " << fmt_float(c.camera_toe_out_rad) << ",\n";
-    os << "  \"camera_tilt_down_rad\": " << fmt_float(c.camera_tilt_down_rad) << ",\n";
-    os << "  \"camera_roll_rad\":      " << fmt_float(c.camera_roll_rad) << "\n";
+    os << "  \"apply_undistortion\":    " << (c.apply_undistortion ? "true" : "false") << ",\n";
+    os << "  \"zoom_factor\":           " << fmt_float(c.zoom_factor) << ",\n";
+    os << "  \"camera_eyes_linked\":    " << (c.camera_eyes_linked ? "true" : "false") << ",\n";
+    os << "  \"camera_toe_out_rad_l\":  " << fmt_float(c.camera_toe_out_rad_l) << ",\n";
+    os << "  \"camera_tilt_down_rad_l\":" << fmt_float(c.camera_tilt_down_rad_l) << ",\n";
+    os << "  \"camera_roll_rad_l\":     " << fmt_float(c.camera_roll_rad_l) << ",\n";
+    os << "  \"camera_toe_out_rad_r\":  " << fmt_float(c.camera_toe_out_rad_r) << ",\n";
+    os << "  \"camera_tilt_down_rad_r\":" << fmt_float(c.camera_tilt_down_rad_r) << ",\n";
+    os << "  \"camera_roll_rad_r\":     " << fmt_float(c.camera_roll_rad_r) << "\n";
     os << "}\n";
     return os.str();
 }
@@ -128,11 +132,22 @@ bool config_from_json(const std::string& json, Config& out) {
             else if (k == "pt_di_guid")         out.passthrough_binding.dinput_device_guid   = v;
             else if (k == "pt_di_btn")          out.passthrough_binding.dinput_button_index  = std::stoi(v);
             else if (k == "pt_di_name")         out.passthrough_binding.dinput_device_name   = v;
-            else if (k == "apply_undistortion") out.apply_undistortion    = (v == "true");
-            else if (k == "zoom_factor")        out.zoom_factor           = std::stof(v);
-            else if (k == "camera_toe_out_rad") out.camera_toe_out_rad    = std::stof(v);
-            else if (k == "camera_tilt_down_rad") out.camera_tilt_down_rad = std::stof(v);
-            else if (k == "camera_roll_rad")    out.camera_roll_rad       = std::stof(v);
+            else if (k == "apply_undistortion")   out.apply_undistortion     = (v == "true");
+            else if (k == "zoom_factor")          out.zoom_factor            = std::stof(v);
+            else if (k == "camera_eyes_linked")   out.camera_eyes_linked     = (v == "true");
+            else if (k == "camera_toe_out_rad_l") out.camera_toe_out_rad_l   = std::stof(v);
+            else if (k == "camera_tilt_down_rad_l") out.camera_tilt_down_rad_l = std::stof(v);
+            else if (k == "camera_roll_rad_l")    out.camera_roll_rad_l      = std::stof(v);
+            else if (k == "camera_toe_out_rad_r") out.camera_toe_out_rad_r   = std::stof(v);
+            else if (k == "camera_tilt_down_rad_r") out.camera_tilt_down_rad_r = std::stof(v);
+            else if (k == "camera_roll_rad_r")    out.camera_roll_rad_r      = std::stof(v);
+            // Legacy single-eye keys — load into left eye; right eye mirrors on next save.
+            else if (k == "camera_toe_out_rad")   { out.camera_toe_out_rad_l  =  std::stof(v);
+                                                    out.camera_toe_out_rad_r  = -std::stof(v); }
+            else if (k == "camera_tilt_down_rad") { out.camera_tilt_down_rad_l = std::stof(v);
+                                                    out.camera_tilt_down_rad_r = std::stof(v); }
+            else if (k == "camera_roll_rad")      { out.camera_roll_rad_l     =  std::stof(v);
+                                                    out.camera_roll_rad_r     = -std::stof(v); }
             // Silently ignore unknown/removed keys (e.g. old detection/recenter fields).
         } catch (...) {}
 

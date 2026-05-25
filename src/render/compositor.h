@@ -20,13 +20,16 @@ struct EyeOutput {
 
 // Runtime-tunable compositor parameters.
 struct CompositorConfig {
-    float global_alpha         = 1.0f;
-    float brightness           = 1.0f;
-    bool  apply_undistortion   = true;
-    float zoom_factor          = 1.0f;
-    float camera_toe_out_rad   = 0.32f;
-    float camera_tilt_down_rad = 0.48f;
-    float camera_roll_rad      = -0.1745f;
+    float global_alpha           = 1.0f;
+    float brightness             = 1.0f;
+    bool  apply_undistortion      = true;
+    float zoom_factor             = 1.0f;
+    float camera_toe_out_rad_l   =  0.32f;
+    float camera_tilt_down_rad_l =  0.48f;
+    float camera_roll_rad_l      = -0.1745f;
+    float camera_toe_out_rad_r   = -0.32f;
+    float camera_tilt_down_rad_r =  0.48f;
+    float camera_roll_rad_r      =  0.1745f;
 };
 
 class Compositor {
