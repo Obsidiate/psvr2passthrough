@@ -1,0 +1,57 @@
+#pragma once
+
+#include "frame.h"
+#include "distortion.h"
+
+#include <atomic>
+#include <thread>
+#include <mutex>
+#include <memory>
+
+namespace psvr2pt {
+
+// Owns the producer thread that reads camera frames from the PSVR2 driver
+// shared memory. Consumers call `try_get_latest()` to grab the most recent
+// stereo frame without blocking.
+class CameraSource {
+public:
+    CameraSource();
+    ~CameraSource();
+
+    CameraSource(const CameraSource&) = delete;
+    CameraSource& operator=(const CameraSource&) = delete;
+
+    // Returns false if the driver shared memory is unavailable. In that case
+    // the layer falls through and behaves as a no-op.
+    bool start();
+    void stop();
+
+    // Non-blocking. Returns false if no frame has been received yet.
+    bool try_get_latest(StereoFrame& out);
+
+    // Calibration is fetched once at start; safe to call any time afterwards.
+    const CameraIntrinsics& intrinsics(CameraId id) const;
+    const CameraParameters& params(CameraId id)     const;
+
+    bool is_running() const { return running_.load(); }
+
+private:
+    void thread_loop();
+
+    std::atomic<bool> running_{false};
+    std::thread       worker_;
+
+    // Double-buffered most-recent frame.
+    StereoFrame       front_;
+    std::mutex        front_mutex_;
+    std::atomic<bool> have_frame_{false};
+    uint64_t          last_seq_ = 0;
+
+    CameraIntrinsics  intrinsics_[2]{};
+    CameraParameters  params_[2]{};
+
+    struct Impl;            // pImpl to hide Windows headers from public users
+    std::unique_ptr<Impl> impl_;
+};
+
+}  // namespace psvr2pt

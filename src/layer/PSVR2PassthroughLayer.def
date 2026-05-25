@@ -1,0 +1,3 @@
+LIBRARY PSVR2PassthroughLayer
+EXPORTS
+    xrNegotiateLoaderApiLayerInterface

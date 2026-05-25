@@ -1,0 +1,26 @@
+build/
+out/
+.vs/
+.vscode/
+*.user
+*.suo
+CMakeUserPresets.json
+vcpkg_installed/
+assets/*.onnx
+assets/*.tflite
+*.tflite
+*.onnx
+
+# Private / local-only files
+.claude/
+handoff.md
+
+# Hand-tracking material — kept locally, excluded from V1 release
+src/handtrack/
+src/detection/
+src/tools/
+model/
+scripts/annotate_centroids.py
+scripts/label_frames.py
+scripts/train_hand_classifier.py
+handoff_handtracking.md
