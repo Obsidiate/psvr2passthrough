@@ -11,20 +11,27 @@ Intended targets: DCS World, MSFS 2024, iRacing, and any other SteamVR OpenXR ti
 
 ## What it does
 
-1. **Camera ingestion** — reads stereo grayscale frames directly from the PSVR2 driver's
+- **Camera ingestion** — reads stereo grayscale frames directly from the PSVR2 driver's
    shared-memory interface. No helper process required; the layer talks to the driver directly.
-2. **Lens undistortion** — applies the per-eye calibration coefficients provided by the driver.
-3. **Stereo geometry correction** — corrects for the cameras' physical mounting angle
+- **Lens undistortion** — applies the per-eye calibration coefficients provided by the driver.
+- **Stereo geometry correction** — corrects for the cameras' physical mounting angle
    (toe-out, tilt-down, roll) via a baked rectification mesh. Adjustable per-eye in the
    config GUI; paired (symmetric) adjustment is the default.
-4. **Button-gated compositing** — intercepts `xrEndFrame` and injects an
+- **Button-gated compositing** — intercepts `xrEndFrame` and injects an
    `XrCompositionLayerProjection` per eye. Visibility is controlled by a user-configured
    binding (keyboard key, XInput gamepad button, or DirectInput HOTAS/joystick button) in
    either hold-to-show or toggle mode. Passthrough can also be forced always-on for
    calibration.
-5. **Quad-views compatible** — tested and primarily iterated in DCS World.
-6. **OBS recording / mirror layer compatible**
-7. **OpenKneeboard compatible**
+- **Quad-views compatible** — tested and primarily iterated in DCS World.
+- **OBS recording / mirror layer compatible**
+- **OpenKneeboard compatible**
+
+## Features
+
+- Button-gated passthrough: keyboard keys, XInput gamepad buttons, DirectInput HOTAS/joystick buttons
+- Hold-to-show or toggle mode
+- Brightness, opacity, zoom, and stereo geometry calibration sliders.
+- Standalone configuration GUI (PSVR2PassthroughConfig.exe)
 
 ## What this is NOT
 
