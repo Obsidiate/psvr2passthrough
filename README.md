@@ -1,11 +1,13 @@
 # PSVR2 Passthrough Layer
 
-**Alpha software — geometry alignment requires manual calibration per headset. See Configuration below.**
-
 An OpenXR implicit API layer that injects real-time stereo passthrough from the PSVR2's
 built-in bottom cameras into any OpenXR application running under SteamVR on PC.
 
+See https://www.youtube.com/watch?v=WyVbhiK8BAc for a demo. 
+
 Intended targets: DCS World, MSFS 2024, iRacing, and any other SteamVR OpenXR title.
+
+**Alpha software — geometry alignment requires manual calibration per headset. See Configuration below.**
 
 ## What it does
 
