@@ -60,6 +60,7 @@ Output:
 
 ## Install
 
+Install OpenXR layer using powershell, and run 
 ```powershell
 install_layer.ps1   # run as admin
 ```
