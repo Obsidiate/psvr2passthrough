@@ -5,7 +5,7 @@ built-in bottom cameras into any OpenXR application running under SteamVR on PC.
 
 See https://www.youtube.com/watch?v=WyVbhiK8BAc for a demo. 
 
-Intended targets: DCS World, MSFS 2024, iRacing, and any other SteamVR OpenXR title.
+Intended targets: DCS World, and other D3D11 OpenXR titles. 
 
 **Alpha software — geometry alignment requires manual calibration per headset. See Configuration below.**
 
