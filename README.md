@@ -9,6 +9,8 @@ Intended targets: DCS World, and other D3D11 OpenXR titles.
 
 **Alpha software — geometry alignment requires manual calibration per headset. See Configuration below.**
 
+Feedback via [github discussion tab](https://github.com/Obsidiate/psvr2passthrough/discussions) above, or the [offical subreddit /r/psvr2passthrough](https://old.reddit.com/r/psvr2passthrough/)
+
 ## What it does
 
 - **Camera ingestion** — reads stereo grayscale frames directly from the PSVR2 driver's
