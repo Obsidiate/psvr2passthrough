@@ -49,30 +49,10 @@ the passthrough is acceptable. It's also what Quest's selective passthrough
 does in Virtual Desktop when the cutouts are around controllers, modulo a
 controller-pose anchor.
 
-## Why we don't use XR_EXT_hand_tracking
-
-Two reasons. First, exposing hand-tracking through the runtime would mean
-games consume it — which is *not* the goal (you have HOTAS / yoke / stick).
-Second, even if we wanted to, the lower PSVR2 cameras don't provide enough
-information for high-quality skeletal estimation, and trying to do so would
-add latency we can't afford.
-
-The detector here outputs only "where in the image" — 2D bounding boxes
-per eye. That's enough to draw a circular mask. We deliberately don't even
-stereo-rectify to recover depth; the per-eye 2D position lines up with the
-per-eye camera image naturally, which is the only thing we need for a 2D
-mask in image space.
-
 ## Threading model
 
-* Camera shared-memory producer: dedicated worker thread inside CameraSource.
-* Hand detection: runs synchronously on the OpenXR render thread inside
-  `xrEndFrame`. At 192×192 input the lite palm detector runs in well under
-  the budget per frame on a 2020-era CPU; if profiling shows otherwise, the
-  detection can be moved to its own thread feeding a SPSC most-recent-result
-  slot. The compositor is single-threaded D3D11; only one immediate context is
-  ever used.
-* Recenter action: polled in `xrSyncActions` on the render thread.
+* Camera shared-memory producer: dedicated worker thread inside `CameraSource`. Decompresses BC4→R8 and swaps into a front buffer; compositor thread consumes via `try_get_latest`.
+* Compositor: single-threaded D3D11 immediate context — only one context is ever used.
 
 ## Failure modes and how the layer degrades
 
@@ -94,9 +74,4 @@ to the next layer. The layer never breaks the game.
 * World-locked passthrough using stereo triangulation of the two camera feeds.
   Possible in principle (the cameras have a known baseline), but slow and
   fragile, and the practical win for sim cockpit use is minimal.
-* GUI configurator. Right now config is hard-coded defaults; the natural next
-  step is a small tray-application reading/writing `%LOCALAPPDATA%\PSVR2PassthroughLayer\config.json`
-  with the `CompositorConfig` fields.
-* Per-game bind toggles. The recenter binding is implicit; per-game profiles
-  (e.g. "use DCS's recenter binding") would require either OpenXR Toolkit-style
-  per-game configs or just letting the user rebind in SteamVR.
+* Per-game bind profiles (e.g. per-game passthrough button presets).

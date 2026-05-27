@@ -26,7 +26,7 @@ struct PassthroughBinding {
     // BindingType::DirectInput
     std::string dinput_device_guid;     // "{xxxxxxxx-xxxx-...}" string form
     int         dinput_button_index = 0;
-    std::string dinput_device_name;     // product name for display only (not serialised)
+    std::string dinput_device_name;     // product name for display only
 
     bool is_none() const { return type == BindingType::None; }
 
@@ -78,7 +78,6 @@ public:
     void start();
     void stop();
     bool scan();                          // returns true when captured
-    bool is_monitoring() const;
     PassthroughBinding captured() const;
 
 private:

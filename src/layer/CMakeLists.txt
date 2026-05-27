@@ -51,14 +51,3 @@ add_custom_command(
     COMMENT "Generating OpenXR API layer manifest"
     VERBATIM
 )
-
-# 2. Copy the assets/ tree (shaders, ONNX model) next to the DLL so the layer
-#    can find them at runtime via a relative path from the loaded module.
-add_custom_command(
-    TARGET PSVR2PassthroughLayer POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/assets
-        $<TARGET_FILE_DIR:PSVR2PassthroughLayer>/assets
-    COMMENT "Copying assets (ONNX model, etc.) next to layer DLL"
-    VERBATIM
-)

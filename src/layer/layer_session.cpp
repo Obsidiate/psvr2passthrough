@@ -137,10 +137,13 @@ LayerSession::compose_layer(const XrFrameEndInfo* original) {
     const uint32_t h = static_cast<uint32_t>(kCameraHeight);
     if (!ensure_swapchain_(w, h)) return nullptr;
 
-    StereoFrame frame;
-    if (!camera_->try_get_latest(frame) || !frame.valid()) return nullptr;
+    // try_get_latest swaps new data into cached_frame_, donating its old buffers
+    // back to the producer for recycling. If no new frame arrived this tick we
+    // reuse the last valid one rather than dropping passthrough entirely.
+    camera_->try_get_latest(cached_frame_);
+    if (!cached_frame_.valid()) return nullptr;
 
-    compositor_->upload_frame(frame);
+    compositor_->upload_frame(cached_frame_);
     compositor_->render(config_);
 
     for (uint32_t eye = 0; eye < 2; ++eye) {

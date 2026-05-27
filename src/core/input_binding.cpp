@@ -596,7 +596,6 @@ void BindingCapturer::close_devices()         { impl_->close_devices(); }
 void BindingCapturer::start()                 { impl_->start(); }
 void BindingCapturer::stop()                  { impl_->stop(); }
 bool BindingCapturer::scan()                  { return impl_->scan(); }
-bool BindingCapturer::is_monitoring() const   { return false; }
 PassthroughBinding BindingCapturer::captured() const { return impl_->result; }
 
 }  // namespace psvr2pt

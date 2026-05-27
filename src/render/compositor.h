@@ -21,7 +21,13 @@ struct EyeOutput {
 // Runtime-tunable compositor parameters.
 struct CompositorConfig {
     float global_alpha           = 1.0f;
+    bool  brightness_enabled     = true;
     float brightness             = 1.3f;
+    bool  contrast_enabled       = true;
+    float contrast               = 1.1f;
+    bool  enhancements_enabled   = true;
+    float unsharp_amount         = 0.3f;
+    float unsharp_radius         = 1.5f;
     bool  apply_undistortion      = true;
     float zoom_factor             = 1.0f;
     float camera_toe_out_rad_l   =  0.32f;
@@ -82,6 +88,14 @@ private:
     UINT eye_w_ = 0;
     UINT eye_h_ = 0;
     bool ready_ = false;
+
+    // Dirty-check state for mesh rebuild — stored as members so session
+    // recreation produces a clean Compositor with correct initial state.
+    bool  mesh_dirty_  = true;
+    float last_zoom_   = -1.f;
+    bool  last_undist_ = false;
+    float last_toe_l_  = -999.f, last_tilt_l_ = -999.f, last_roll_l_ = -999.f;
+    float last_toe_r_  = -999.f, last_tilt_r_ = -999.f, last_roll_r_ = -999.f;
 };
 
 }  // namespace psvr2pt

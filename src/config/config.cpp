@@ -81,7 +81,13 @@ std::string config_to_json(const Config& c) {
     os << "  \"enabled\":              " << (c.enabled ? "true" : "false") << ",\n";
     os << "  \"force_passthrough_on\": " << (c.force_passthrough_on ? "true" : "false") << ",\n";
     os << "  \"global_alpha\":         " << fmt_float(c.global_alpha) << ",\n";
+    os << "  \"brightness_enabled\":   " << (c.brightness_enabled   ? "true" : "false") << ",\n";
     os << "  \"brightness\":           " << fmt_float(c.brightness) << ",\n";
+    os << "  \"contrast_enabled\":     " << (c.contrast_enabled     ? "true" : "false") << ",\n";
+    os << "  \"contrast\":             " << fmt_float(c.contrast) << ",\n";
+    os << "  \"enhancements_enabled\": " << (c.enhancements_enabled ? "true" : "false") << ",\n";
+    os << "  \"unsharp_amount\":       " << fmt_float(c.unsharp_amount) << ",\n";
+    os << "  \"unsharp_radius\":       " << fmt_float(c.unsharp_radius) << ",\n";
     os << "  \"toggle_mode\":          " << (c.toggle_mode ? "true" : "false") << ",\n";
     // PassthroughBinding as flat fields.
     os << "  \"pt_type\":              " << static_cast<int>(c.passthrough_binding.type) << ",\n";
@@ -122,7 +128,13 @@ bool config_from_json(const std::string& json, Config& out) {
             if      (k == "enabled")               out.enabled               = (v == "true");
             else if (k == "force_passthrough_on") out.force_passthrough_on  = (v == "true");
             else if (k == "global_alpha")         out.global_alpha          = std::stof(v);
+            else if (k == "brightness_enabled")   out.brightness_enabled    = (v == "true");
             else if (k == "brightness")           out.brightness            = std::stof(v);
+            else if (k == "contrast_enabled")     out.contrast_enabled      = (v == "true");
+            else if (k == "contrast")             out.contrast              = std::stof(v);
+            else if (k == "enhancements_enabled") out.enhancements_enabled  = (v == "true");
+            else if (k == "unsharp_amount")       out.unsharp_amount        = std::stof(v);
+            else if (k == "unsharp_radius")       out.unsharp_radius        = std::stof(v);
             else if (k == "toggle_mode")         out.toggle_mode           = (v == "true");
             else if (k == "pt_type")             out.passthrough_binding.type
                                                      = static_cast<BindingType>(std::stoi(v));
@@ -157,10 +169,16 @@ bool config_from_json(const std::string& json, Config& out) {
 
     if (out.global_alpha < 0.f)  out.global_alpha = 0.f;
     if (out.global_alpha > 1.f)  out.global_alpha = 1.f;
-    if (out.brightness   < 0.5f) out.brightness   = 0.5f;
-    if (out.brightness   > 4.0f) out.brightness   = 4.0f;
-    if (out.zoom_factor  < 0.5f) out.zoom_factor  = 0.5f;
-    if (out.zoom_factor  > 4.0f) out.zoom_factor  = 4.0f;
+    if (out.brightness     < 0.5f) out.brightness     = 0.5f;
+    if (out.brightness     > 4.0f) out.brightness     = 4.0f;
+    if (out.contrast       < 0.5f) out.contrast       = 0.5f;
+    if (out.contrast       > 3.0f) out.contrast       = 3.0f;
+    if (out.unsharp_amount < 0.0f) out.unsharp_amount = 0.0f;
+    if (out.unsharp_amount > 1.0f) out.unsharp_amount = 1.0f;
+    if (out.unsharp_radius < 0.5f) out.unsharp_radius = 0.5f;
+    if (out.unsharp_radius > 4.0f) out.unsharp_radius = 4.0f;
+    if (out.zoom_factor    < 0.5f) out.zoom_factor    = 0.5f;
+    if (out.zoom_factor    > 4.0f) out.zoom_factor    = 4.0f;
     return true;
 }
 

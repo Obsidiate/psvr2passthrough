@@ -12,11 +12,24 @@ namespace psvr2pt {
 
 namespace {
 
+// Hint text rendered in the disabled colour and wrapped to the available column width.
+static void TextHint(const char* text) {
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+    ImGui::TextWrapped("%s", text);
+    ImGui::PopStyleColor();
+}
+
 bool configs_equal(const Config& a, const Config& b) {
     return a.enabled               == b.enabled
         && a.force_passthrough_on  == b.force_passthrough_on
         && a.global_alpha          == b.global_alpha
+        && a.brightness_enabled    == b.brightness_enabled
         && a.brightness            == b.brightness
+        && a.contrast_enabled      == b.contrast_enabled
+        && a.contrast              == b.contrast
+        && a.enhancements_enabled  == b.enhancements_enabled
+        && a.unsharp_amount        == b.unsharp_amount
+        && a.unsharp_radius        == b.unsharp_radius
         && a.toggle_mode         == b.toggle_mode
         && a.passthrough_binding.type               == b.passthrough_binding.type
         && a.passthrough_binding.vk_code            == b.passthrough_binding.vk_code
@@ -65,7 +78,7 @@ void ConfigWindow::draw() {
 
     ImGui::TextUnformatted("PSVR2 Passthrough Layer — Configuration");
     ImGui::Separator();
-    ImGui::TextDisabled("Changes apply when DCS / MSFS / iRacing next starts. Save then restart your sim.");
+    TextHint("Changes apply when your sim next starts. Save then restart your sim.");
     ImGui::Spacing();
 
     if (ImGui::BeginTable("layout", 2, ImGuiTableFlags_BordersInnerV
@@ -75,10 +88,14 @@ void ConfigWindow::draw() {
         ImGui::TableNextRow();
 
         ImGui::TableSetColumnIndex(0);
-        draw_main_panel();
+        if (ImGui::BeginChild("##left_scroll", ImVec2(0, 0), false))
+            draw_main_panel();
+        ImGui::EndChild();
 
         ImGui::TableSetColumnIndex(1);
-        draw_about_panel();
+        if (ImGui::BeginChild("##right_scroll", ImVec2(0, 0), false))
+            draw_about_panel();
+        ImGui::EndChild();
 
         ImGui::EndTable();
     }
@@ -127,27 +144,27 @@ void ConfigWindow::draw_main_panel() {
     ImGui::SameLine();
     if (dirty_)               ImGui::TextColored(dirty_col, "Unsaved changes");
     else if (saved_recently_) ImGui::TextColored(saved_col, "Saved.");
-    else                      ImGui::TextDisabled("No changes.");
+    else                      TextHint("No changes.");
 
-    ImGui::TextDisabled("Config: %s", config_file_path().string().c_str());
+    TextHint(("Config: " + config_file_path().string()).c_str());
     ImGui::Spacing();
 
     // -----------------------------------------------------------------------
     ImGui::SeparatorText("Master switch");
     ImGui::Checkbox("Layer enabled", &working_.enabled);
-    ImGui::TextDisabled("If disabled, the layer loads but stays inert — no camera,");
-    ImGui::TextDisabled("no compositing. Useful for A/B comparisons.");
+    TextHint("If disabled, the layer loads but stays inert — no camera,");
+    TextHint("no compositing. Useful for A/B comparisons.");
     ImGui::Spacing();
     ImGui::Checkbox("Force passthrough always visible (debug)", &working_.force_passthrough_on);
-    ImGui::TextDisabled("Ignores button binding. Use to verify passthrough is working.");
-    ImGui::TextDisabled("Disable before normal use — passthrough will overlay all games.");
+    TextHint("Ignores button binding. Use to verify passthrough is working.");
+    TextHint("Disable before normal use — passthrough will overlay all games.");
     ImGui::Spacing();
 
     // -----------------------------------------------------------------------
     ImGui::SeparatorText("Passthrough transparency");
     ImGui::SliderFloat("Opacity", &working_.global_alpha, 0.0f, 1.0f, "%.2f");
-    ImGui::TextDisabled("1.0 = fully opaque passthrough.  0.5 = semi-transparent.");
-    ImGui::TextDisabled("0.0 = invisible (layer still composites but draws nothing).");
+    TextHint("1.0 = fully opaque passthrough.  0.5 = semi-transparent.");
+    TextHint("0.0 = invisible (layer still composites but draws nothing).");
     ImGui::Spacing();
 
     // -----------------------------------------------------------------------
@@ -166,7 +183,7 @@ void ConfigWindow::draw_main_panel() {
             working_.passthrough_binding = PassthroughBinding{};
             if (capturing_) { capturer_.stop(); capturing_ = false; }
         }
-        ImGui::TextDisabled("Passthrough will be always visible when no binding is set.");
+        TextHint("Passthrough will be always visible when no binding is set.");
         ImGui::Spacing();
 
         ImGui::SeparatorText("Activation mode");
@@ -176,26 +193,63 @@ void ConfigWindow::draw_main_panel() {
         ImGui::RadioButton("Toggle on/off", &mode, 1);
         working_.toggle_mode = (mode == 1);
         if (working_.toggle_mode)
-            ImGui::TextDisabled("Press once to show passthrough, press again to hide.");
+            TextHint("Press once to show passthrough, press again to hide.");
         else
-            ImGui::TextDisabled("Passthrough visible only while button is held.");
+            TextHint("Passthrough visible only while button is held.");
     } else {
-        ImGui::TextDisabled("No binding set — passthrough is always visible.");
-        ImGui::TextDisabled("Set a binding to control it with a button.");
+        TextHint("No binding set — passthrough is always visible.");
+        TextHint("Set a binding to control it with a button.");
     }
     ImGui::Spacing();
 
     // -----------------------------------------------------------------------
     ImGui::SeparatorText("Camera image");
+    ImGui::Checkbox("##brightness_en", &working_.brightness_enabled);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Enable brightness adjustment");
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!working_.brightness_enabled);
+    ImGui::SetNextItemWidth(-1.f);
     ImGui::SliderFloat("Brightness", &working_.brightness, 0.5f, 4.0f, "%.2f");
-    ImGui::TextDisabled("Boost to match native passthrough brightness. Default 1.3.");
+    TextHint("Overall luminance multiplier. Default 1.3.");
+    ImGui::EndDisabled();
+
+    ImGui::Checkbox("##contrast_en", &working_.contrast_enabled);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Enable contrast adjustment");
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!working_.contrast_enabled);
+    ImGui::SetNextItemWidth(-1.f);
+    ImGui::SliderFloat("Contrast", &working_.contrast, 0.5f, 3.0f, "%.2f");
+    TextHint("Tonal contrast around midpoint. Compensates for flat auto-exposure. Default 1.1.");
+    ImGui::EndDisabled();
+    ImGui::Spacing();
+
+    // -----------------------------------------------------------------------
+    ImGui::SeparatorText("Image enhancement");
+    ImGui::Checkbox("Enable image enhancement", &working_.enhancements_enabled);
+    TextHint("Unsharp masking sharpens edges and recovers detail lost to BC4 compression.");
+    ImGui::BeginDisabled(!working_.enhancements_enabled);
+    ImGui::SliderFloat("Unsharp amount", &working_.unsharp_amount, 0.0f, 1.0f,  "%.2f");
+    TextHint("Detail enhancement strength. Default 0.30.");
+    ImGui::SliderFloat("Unsharp radius", &working_.unsharp_radius, 0.5f, 4.0f,  "%.1f px");
+    TextHint("Blur radius for unsharp mask in camera pixels. Default 1.5.");
+    ImGui::EndDisabled();
+    ImGui::Spacing();
+    ImGui::SeparatorText("Lens");
     ImGui::Checkbox("Apply lens undistortion", &working_.apply_undistortion);
     ImGui::SliderFloat("Zoom factor", &working_.zoom_factor, 0.5f, 4.0f, "%.2f");
-    ImGui::TextDisabled("Higher zoom = narrower FOV, fewer lens artefacts at edges.");
+    TextHint("Higher zoom = narrower FOV, fewer lens artefacts at edges.");
     ImGui::Spacing();
 
     // -----------------------------------------------------------------------
     ImGui::SeparatorText("Stereo geometry calibration");
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.85f, 0.2f, 1.0f));
+    ImGui::TextWrapped(
+        "Alpha calibration: the default values are a best-effort approximation "
+        "and may feel slightly off on your headset. If the defaults are way out "
+        "or you find values that work better, please start a discussion on GitHub "
+        "or find the project on Reddit — your data helps improve the defaults for everyone.");
+    ImGui::PopStyleColor();
+    ImGui::Spacing();
     {
         static constexpr float kR2D = 180.f / 3.14159265f;
         static constexpr float kD2R = 3.14159265f / 180.f;
@@ -204,18 +258,18 @@ void ConfigWindow::draw_main_panel() {
             if (ImGui::Button("Unlock eyes"))
                 working_.camera_eyes_linked = false;
             ImGui::SameLine();
-            ImGui::TextDisabled("Both eyes adjust symmetrically.");
+            TextHint("Both eyes adjust symmetrically.");
 
             float toe_deg  =  working_.camera_toe_out_rad_l * kR2D;
             float tilt_deg =  working_.camera_tilt_down_rad_l * kR2D;
             float roll_deg =  working_.camera_roll_rad_l * kR2D;
             bool changed = false;
             changed |= ImGui::SliderFloat("Toe-out (deg)",  &toe_deg,  0.0f,  45.8f, "%.1f");
-            ImGui::TextDisabled("Outward rotation per eye. Too high = cross-eyed. Too low = wall-eyed.");
+            TextHint("Outward rotation per eye. Too high = cross-eyed. Too low = wall-eyed.");
             changed |= ImGui::SliderFloat("Tilt down (deg)", &tilt_deg, 0.0f,  45.8f, "%.1f");
-            ImGui::TextDisabled("Corrects cameras pointing downward. Higher = more upward shift.");
+            TextHint("Corrects cameras pointing downward. Higher = more upward shift.");
             changed |= ImGui::SliderFloat("Roll (deg)",      &roll_deg, -22.9f, 22.9f, "%.1f");
-            ImGui::TextDisabled("Corrects physical camera twist. Negative = CCW correction.");
+            TextHint("Corrects physical camera twist. Negative = CCW correction.");
             if (changed) {
                 working_.camera_toe_out_rad_l   =  toe_deg  * kD2R;
                 working_.camera_tilt_down_rad_l =  tilt_deg * kD2R;
@@ -233,7 +287,7 @@ void ConfigWindow::draw_main_panel() {
                 working_.camera_eyes_linked = true;
             }
             ImGui::SameLine();
-            ImGui::TextDisabled("Eyes adjust independently. Re-lock mirrors left to right.");
+            TextHint("Eyes adjust independently. Re-lock mirrors left to right.");
             ImGui::Spacing();
 
             if (ImGui::BeginTable("eye_sliders", 3,
@@ -287,7 +341,7 @@ void ConfigWindow::draw_main_panel() {
 
                 ImGui::EndTable();
             }
-            ImGui::TextDisabled("Toe/roll: positive = camera rotates outward. Tilt: positive = camera tilts down.");
+            TextHint("Toe/roll: positive = camera rotates outward. Tilt: positive = camera tilts down.");
         }
     }
     ImGui::Spacing();
@@ -309,8 +363,8 @@ void ConfigWindow::draw_binding_capture_button() {
             capturer_.start();
             capturing_ = true;
         }
-        ImGui::TextDisabled("Keyboard keys, XInput gamepad buttons,");
-        ImGui::TextDisabled("and DirectInput HOTAS / joystick buttons are all supported.");
+        TextHint("Keyboard keys, XInput gamepad buttons,");
+        TextHint("and DirectInput HOTAS / joystick buttons are all supported.");
     }
 }
 
@@ -324,6 +378,10 @@ void ConfigWindow::draw_about_panel() {
         "Passthrough button binding supports keyboard keys, Xbox/gamepad "
         "buttons (XInput), and any HOTAS or joystick (DirectInput) — no "
         "intermediate mapping required.");
+    ImGui::Spacing();
+
+    ImGui::SeparatorText("Tips");
+    ImGui::TextWrapped("Ctrl+Click any slider to type an exact value.");
     ImGui::Spacing();
 
     // Lazy-load intrinsics from the calibration dump written by the layer DLL.
@@ -353,7 +411,7 @@ void ConfigWindow::draw_about_panel() {
     }
 
     ImGui::SeparatorText("Headset intrinsics");
-    ImGui::TextDisabled("Read from PSVR2 driver at last session start.");
+    TextHint("Read from PSVR2 driver at last session start.");
     ImGui::Spacing();
     ImGui::TextUnformatted(intrinsics_text_.c_str());
 }
