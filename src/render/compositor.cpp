@@ -23,17 +23,42 @@ VSOut main(VSIn input)
 }
 )HLSL";
 
-// Full-frame passthrough at uniform alpha — no hand mask, no circles.
-// cb0.x = global_alpha [0..1], cb0.y = brightness [0.5..4.0].
+// Full-frame passthrough with brightness, contrast, and unsharp masking.
+// cb0: params  = {global_alpha, brightness, contrast, unsharp_amount}
+//      params2 = {unsharp_step (radius/tex_width in UV space), 0, 0, 0}
 constexpr const char* kPixelShader = R"HLSL(
 Texture2D    src     : register(t0);
 SamplerState smp     : register(s0);
 
-cbuffer Params : register(b0) { float4 params; };  // x = global_alpha, y = brightness
+cbuffer Params : register(b0) {
+    float4 params;   // x=alpha, y=brightness, z=contrast, w=unsharp_amount
+    float4 params2;  // x=unsharp_step
+};
 
 float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET
 {
-    float g = saturate(src.Sample(smp, uv).r * params.y);
+    float raw = src.Sample(smp, uv).r;
+
+    // 3x3 Gaussian blur for unsharp mask (8 neighbours + weighted centre).
+    float s = params2.x;
+    float blurred =
+        src.Sample(smp, uv + float2(-s, -s)).r * (1.0/16.0) +
+        src.Sample(smp, uv + float2( 0, -s)).r * (2.0/16.0) +
+        src.Sample(smp, uv + float2( s, -s)).r * (1.0/16.0) +
+        src.Sample(smp, uv + float2(-s,  0)).r * (2.0/16.0) +
+        raw                                    * (4.0/16.0) +
+        src.Sample(smp, uv + float2( s,  0)).r * (2.0/16.0) +
+        src.Sample(smp, uv + float2(-s,  s)).r * (1.0/16.0) +
+        src.Sample(smp, uv + float2( 0,  s)).r * (2.0/16.0) +
+        src.Sample(smp, uv + float2( s,  s)).r * (1.0/16.0);
+
+    // Unsharp mask: amplify detail above the blur baseline.
+    float g = saturate(raw + params.w * (raw - blurred));
+
+    // Brightness then contrast around midpoint.
+    g = saturate(g * params.y);
+    g = saturate(0.5 + (g - 0.5) * params.z);
+
     float a = params.x;
     return float4(g * a, g * a, g * a, a);
 }
@@ -52,9 +77,10 @@ ComPtr<ID3DBlob> compile(const char* src, const char* entry, const char* profile
 }
 
 struct CBParams {
-    DirectX::XMFLOAT4 params;   // x=alpha, yzw=padding
+    DirectX::XMFLOAT4 params;   // x=alpha, y=brightness, z=contrast, w=unsharp_amount
+    DirectX::XMFLOAT4 params2;  // x=unsharp_step
 };
-static_assert(sizeof(CBParams) == 16, "CBParams must be 16 bytes");
+static_assert(sizeof(CBParams) == 32, "CBParams must be 32 bytes");
 
 }  // namespace
 
@@ -218,8 +244,12 @@ void Compositor::upload_frame(const StereoFrame& frame) {
         if (FAILED(ctx_->Map(cam_tex_[eye].Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &map))) continue;
         const uint8_t* src = sources[eye];
         uint8_t*       dst = static_cast<uint8_t*>(map.pData);
-        for (int y = 0; y < kCameraHeight; ++y)
-            std::memcpy(dst + y * map.RowPitch, src + y * kCameraWidth, kCameraWidth);
+        if (static_cast<int>(map.RowPitch) == kCameraWidth) {
+            std::memcpy(dst, src, static_cast<size_t>(kCameraWidth) * kCameraHeight);
+        } else {
+            for (int y = 0; y < kCameraHeight; ++y)
+                std::memcpy(dst + y * map.RowPitch, src + y * kCameraWidth, kCameraWidth);
+        }
         ctx_->Unmap(cam_tex_[eye].Get(), 0);
     }
 }
@@ -227,22 +257,20 @@ void Compositor::upload_frame(const StereoFrame& frame) {
 void Compositor::render(const CompositorConfig& cfg) {
     if (!ready_) return;
 
-    static float last_zoom    = -1.f;
-    static bool  last_undist  = !cfg.apply_undistortion;
-    static float last_toe_l   = -999.f, last_tilt_l = -999.f, last_roll_l = -999.f;
-    static float last_toe_r   = -999.f, last_tilt_r = -999.f, last_roll_r = -999.f;
-    if (last_zoom   != cfg.zoom_factor          ||
-        last_undist != cfg.apply_undistortion   ||
-        last_toe_l  != cfg.camera_toe_out_rad_l || last_tilt_l != cfg.camera_tilt_down_rad_l || last_roll_l != cfg.camera_roll_rad_l ||
-        last_toe_r  != cfg.camera_toe_out_rad_r || last_tilt_r != cfg.camera_tilt_down_rad_r || last_roll_r != cfg.camera_roll_rad_r) {
+    if (mesh_dirty_         ||
+        last_zoom_   != cfg.zoom_factor          ||
+        last_undist_ != cfg.apply_undistortion   ||
+        last_toe_l_  != cfg.camera_toe_out_rad_l || last_tilt_l_ != cfg.camera_tilt_down_rad_l || last_roll_l_ != cfg.camera_roll_rad_l ||
+        last_toe_r_  != cfg.camera_toe_out_rad_r || last_tilt_r_ != cfg.camera_tilt_down_rad_r || last_roll_r_ != cfg.camera_roll_rad_r) {
         rebuild_mesh_(0, cfg.zoom_factor, cfg.apply_undistortion,
                       cfg.camera_toe_out_rad_l, cfg.camera_tilt_down_rad_l, cfg.camera_roll_rad_l);
         rebuild_mesh_(1, cfg.zoom_factor, cfg.apply_undistortion,
                       cfg.camera_toe_out_rad_r, cfg.camera_tilt_down_rad_r, cfg.camera_roll_rad_r);
-        last_zoom   = cfg.zoom_factor;
-        last_undist = cfg.apply_undistortion;
-        last_toe_l  = cfg.camera_toe_out_rad_l; last_tilt_l = cfg.camera_tilt_down_rad_l; last_roll_l = cfg.camera_roll_rad_l;
-        last_toe_r  = cfg.camera_toe_out_rad_r; last_tilt_r = cfg.camera_tilt_down_rad_r; last_roll_r = cfg.camera_roll_rad_r;
+        mesh_dirty_  = false;
+        last_zoom_   = cfg.zoom_factor;
+        last_undist_ = cfg.apply_undistortion;
+        last_toe_l_  = cfg.camera_toe_out_rad_l; last_tilt_l_ = cfg.camera_tilt_down_rad_l; last_roll_l_ = cfg.camera_roll_rad_l;
+        last_toe_r_  = cfg.camera_toe_out_rad_r; last_tilt_r_ = cfg.camera_tilt_down_rad_r; last_roll_r_ = cfg.camera_roll_rad_r;
     }
 
     const float clear[4]{ 0, 0, 0, 0 };
@@ -258,15 +286,25 @@ void Compositor::render(const CompositorConfig& cfg) {
     ctx_->OMSetBlendState(blend_.Get(), blend_factor, 0xffffffff);
     ctx_->RSSetState(raster_.Get());
 
-    for (int eye = 0; eye < 2; ++eye) {
-        CBParams cb{ DirectX::XMFLOAT4{ cfg.global_alpha, cfg.brightness, 0.f, 0.f } };
+    // Upload constant buffer once — all params are identical for both eyes.
+    {
+        const float eff_brightness = cfg.brightness_enabled   ? cfg.brightness   : 1.0f;
+        const float eff_contrast   = cfg.contrast_enabled     ? cfg.contrast     : 1.0f;
+        const float eff_unsharp    = cfg.enhancements_enabled ? cfg.unsharp_amount : 0.0f;
+        const float unsharp_step   = cfg.unsharp_radius / static_cast<float>(kCameraWidth);
+        CBParams cb{
+            DirectX::XMFLOAT4{ cfg.global_alpha, eff_brightness, eff_contrast, eff_unsharp },
+            DirectX::XMFLOAT4{ unsharp_step, 0.f, 0.f, 0.f }
+        };
         D3D11_MAPPED_SUBRESOURCE map{};
         ctx_->Map(cb_per_eye_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
         std::memcpy(map.pData, &cb, sizeof(cb));
         ctx_->Unmap(cb_per_eye_.Get(), 0);
         ctx_->VSSetConstantBuffers(0, 1, cb_per_eye_.GetAddressOf());
         ctx_->PSSetConstantBuffers(0, 1, cb_per_eye_.GetAddressOf());
+    }
 
+    for (int eye = 0; eye < 2; ++eye) {
         D3D11_VIEWPORT vp{ 0, 0,
             static_cast<float>(eye_w_), static_cast<float>(eye_h_), 0.f, 1.f };
         ctx_->RSSetViewports(1, &vp);
@@ -283,9 +321,23 @@ void Compositor::render(const CompositorConfig& cfg) {
         ctx_->PSSetShaderResources(0, 1, &null_srv);
     }
 
-    ID3D11RenderTargetView* null_rtv = nullptr;
+    // Unbind only what we touched — avoids the full ClearState() overhead which
+    // disrupts the host game's D3D11 bind state and causes unnecessary re-binding.
+    ID3D11RenderTargetView* null_rtv  = nullptr;
+    ID3D11Buffer*           null_buf  = nullptr;
+    ID3D11SamplerState*     null_samp = nullptr;
+    UINT                    zero      = 0;
     ctx_->OMSetRenderTargets(1, &null_rtv, nullptr);
-    ctx_->ClearState();
+    ctx_->VSSetShader(nullptr, nullptr, 0);
+    ctx_->PSSetShader(nullptr, nullptr, 0);
+    ctx_->IASetInputLayout(nullptr);
+    ctx_->VSSetConstantBuffers(0, 1, &null_buf);
+    ctx_->PSSetConstantBuffers(0, 1, &null_buf);
+    ctx_->PSSetSamplers(0, 1, &null_samp);
+    ctx_->OMSetBlendState(nullptr, nullptr, 0xffffffff);
+    ctx_->RSSetState(nullptr);
+    ctx_->IASetVertexBuffers(0, 1, &null_buf, &zero, &zero);
+    ctx_->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
 }
 
 }  // namespace psvr2pt

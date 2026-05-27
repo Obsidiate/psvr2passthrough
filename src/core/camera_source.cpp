@@ -22,17 +22,17 @@ static void decompress_bc4_block(const uint8_t* src, uint8_t* dst, int dst_strid
     lut[0] = r0;
     lut[1] = r1;
     if (r0 > r1) {
-        lut[2] = static_cast<uint8_t>((6 * r0 + 1 * r1) / 7);
-        lut[3] = static_cast<uint8_t>((5 * r0 + 2 * r1) / 7);
-        lut[4] = static_cast<uint8_t>((4 * r0 + 3 * r1) / 7);
-        lut[5] = static_cast<uint8_t>((3 * r0 + 4 * r1) / 7);
-        lut[6] = static_cast<uint8_t>((2 * r0 + 5 * r1) / 7);
-        lut[7] = static_cast<uint8_t>((1 * r0 + 6 * r1) / 7);
+        lut[2] = static_cast<uint8_t>((6 * r0 + 1 * r1 + 3) / 7);
+        lut[3] = static_cast<uint8_t>((5 * r0 + 2 * r1 + 3) / 7);
+        lut[4] = static_cast<uint8_t>((4 * r0 + 3 * r1 + 3) / 7);
+        lut[5] = static_cast<uint8_t>((3 * r0 + 4 * r1 + 3) / 7);
+        lut[6] = static_cast<uint8_t>((2 * r0 + 5 * r1 + 3) / 7);
+        lut[7] = static_cast<uint8_t>((1 * r0 + 6 * r1 + 3) / 7);
     } else {
-        lut[2] = static_cast<uint8_t>((4 * r0 + 1 * r1) / 5);
-        lut[3] = static_cast<uint8_t>((3 * r0 + 2 * r1) / 5);
-        lut[4] = static_cast<uint8_t>((2 * r0 + 3 * r1) / 5);
-        lut[5] = static_cast<uint8_t>((1 * r0 + 4 * r1) / 5);
+        lut[2] = static_cast<uint8_t>((4 * r0 + 1 * r1 + 2) / 5);
+        lut[3] = static_cast<uint8_t>((3 * r0 + 2 * r1 + 2) / 5);
+        lut[4] = static_cast<uint8_t>((2 * r0 + 3 * r1 + 2) / 5);
+        lut[5] = static_cast<uint8_t>((1 * r0 + 4 * r1 + 2) / 5);
         lut[6] = 0;
         lut[7] = 255;
     }
@@ -198,10 +198,16 @@ void CameraSource::thread_loop() {
 bool CameraSource::try_get_latest(StereoFrame& out) {
     if (!have_frame_.load()) return false;
     std::lock_guard lock(front_mutex_);
-    out.left        = front_.left;
-    out.right       = front_.right;
+    // Swap rather than copy — out donates its old (already-allocated) buffers to
+    // front_ so the producer can recycle them without reallocating.
+    // Reset have_frame_ so the next call blocks until the producer writes a new
+    // frame; this prevents re-consuming an empty front_ when the game renders
+    // faster than the camera (e.g. 120 Hz game vs ~60 Hz camera).
+    out.left.swap(front_.left);
+    out.right.swap(front_.right);
     out.captured_at = front_.captured_at;
     out.sequence    = front_.sequence;
+    have_frame_.store(false);
     return true;
 }
 

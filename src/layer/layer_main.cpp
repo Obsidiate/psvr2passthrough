@@ -158,12 +158,10 @@ XrResult XRAPI_CALL pt_xrCreateSession(XrInstance instance,
     XrResult r = state->next.xrCreateSession(instance, createInfo, session);
     if (XR_FAILED(r)) return r;
 
-    // Register the session handle immediately so that concurrent calls from
-    // the app's input thread (e.g. xrAttachSessionActionSets) can find the
-    // session state via find_for_session() even while we are still constructing
-    // the LayerSession below. state->actions is already valid at this point
-    // (initialised during xrCreateApiLayerInstance), which is all that
-    // pt_xrAttachSessionActionSets needs.
+    // Register the session handle before constructing LayerSession so that any
+    // concurrent call from the app's input thread (e.g. DCS calling
+    // xrAttachSessionActionSets while the render thread is still inside
+    // xrCreateSession) can find the session via find_for_session().
     LayerState::get().register_session(*session, state);
 
     // Walk the next chain looking for a D3D11 binding. If the app is using
@@ -185,7 +183,13 @@ XrResult XRAPI_CALL pt_xrCreateSession(XrInstance instance,
         // captured once and used for the lifetime of this session.
         auto& cc = state->session->config();
         cc.global_alpha             = state->config.global_alpha;
+        cc.brightness_enabled       = state->config.brightness_enabled;
         cc.brightness               = state->config.brightness;
+        cc.contrast_enabled         = state->config.contrast_enabled;
+        cc.contrast                 = state->config.contrast;
+        cc.enhancements_enabled     = state->config.enhancements_enabled;
+        cc.unsharp_amount           = state->config.unsharp_amount;
+        cc.unsharp_radius           = state->config.unsharp_radius;
         cc.apply_undistortion       = state->config.apply_undistortion;
         cc.zoom_factor              = state->config.zoom_factor;
         cc.camera_toe_out_rad_l     = state->config.camera_toe_out_rad_l;

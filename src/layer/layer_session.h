@@ -54,6 +54,7 @@ private:
 
     std::unique_ptr<CameraSource>  camera_;
     std::unique_ptr<Compositor>    compositor_;
+    StereoFrame cached_frame_;   // persists between frames so try_get_latest swap recycles buffers
 
     // Passthrough visibility state.
     BindingPoller poller_;

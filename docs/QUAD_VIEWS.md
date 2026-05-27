@@ -77,8 +77,5 @@ adds no new DCS-specific requirements.
 
 Quad-Views-Foveated renders the *focus* region at a higher pixel density than
 the *peripheral* region. Our passthrough composites onto the peripheral
-(full-FOV) views — so if your detected hands happen to fall inside the
-foveated focus region, the cutout edge will look slightly softer there than
-elsewhere. In practice the focus region is centred near gaze, and you don't
-usually stare at your HOTAS hands, so this rarely matters. If you do notice
-it, increase the cutout feather a bit to make the transition invisible.
+(full-FOV) views, so the passthrough image resolution is consistent regardless
+of where the user is looking.

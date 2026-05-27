@@ -13,7 +13,13 @@ struct Config {
 
     // Passthrough appearance.
     float global_alpha         = 1.0f;   // transparency [0..1] — 1 = fully opaque
+    bool  brightness_enabled   = true;
     float brightness           = 1.3f;   // luminance multiplier [0.5..4.0]
+    bool  contrast_enabled     = true;
+    float contrast             = 1.1f;   // tonal contrast around midpoint [0.5..3.0]
+    bool  enhancements_enabled = true;
+    float unsharp_amount       = 0.3f;   // unsharp mask strength [0.0..1.0]
+    float unsharp_radius       = 1.5f;   // unsharp mask blur radius in camera pixels [0.5..4.0]
 
     // Debug override — ignores binding entirely, passthrough always visible.
     bool force_passthrough_on = false;
