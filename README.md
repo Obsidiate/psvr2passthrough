@@ -71,7 +71,9 @@ Output:
 
 ## Install
 
-Install OpenXR layer using powershell, and run 
+unzip release to installation folder and use the install.bat, or 
+
+from a powershell prompt, run 
 ```powershell
 install_layer.ps1   # run as admin
 ```
