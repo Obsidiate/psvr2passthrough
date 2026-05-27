@@ -7,7 +7,7 @@ See https://www.youtube.com/watch?v=WyVbhiK8BAc for a demo.
 
 Intended targets: DCS World, and other D3D11 OpenXR titles. 
 
-**Alpha software — geometry alignment requires manual calibration per headset. See Configuration below.**
+**Alpha software — geometry alignment WIP**
 
 Feedback via [github discussion tab](https://github.com/Obsidiate/psvr2passthrough/discussions) above, or the [offical subreddit /r/psvr2passthrough](https://old.reddit.com/r/psvr2passthrough/)
 
