@@ -171,11 +171,11 @@ void Compositor::create_camera_textures_() {
         td.Height = kCameraHeight;
         td.MipLevels = 1;
         td.ArraySize = 1;
-        td.Format = DXGI_FORMAT_R8_UNORM;
+        td.Format = DXGI_FORMAT_BC4_UNORM;
         td.SampleDesc.Count = 1;
-        td.Usage = D3D11_USAGE_DYNAMIC;
+        td.Usage = D3D11_USAGE_DEFAULT;
         td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-        td.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+        td.CPUAccessFlags = 0;
         check_hr(device_->CreateTexture2D(&td, nullptr, &cam_tex_[eye]), "CreateTexture2D(cam)");
         check_hr(device_->CreateShaderResourceView(cam_tex_[eye].Get(), nullptr, &cam_srv_[eye]),
                  "CreateSRV(cam)");
@@ -239,18 +239,11 @@ void Compositor::rebuild_mesh_(int eye, float zoom, bool apply,
 void Compositor::upload_frame(const StereoFrame& frame) {
     if (!ready_ || !frame.valid()) return;
     const uint8_t* sources[2] = { frame.left.data(), frame.right.data() };
+    // BC4 row pitch: bytes per row of 4×4 blocks = (width/4) * 8 bytes/block.
+    const UINT block_row_pitch = (kCameraWidth / 4) * 8;
     for (int eye = 0; eye < 2; ++eye) {
-        D3D11_MAPPED_SUBRESOURCE map{};
-        if (FAILED(ctx_->Map(cam_tex_[eye].Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &map))) continue;
-        const uint8_t* src = sources[eye];
-        uint8_t*       dst = static_cast<uint8_t*>(map.pData);
-        if (static_cast<int>(map.RowPitch) == kCameraWidth) {
-            std::memcpy(dst, src, static_cast<size_t>(kCameraWidth) * kCameraHeight);
-        } else {
-            for (int y = 0; y < kCameraHeight; ++y)
-                std::memcpy(dst + y * map.RowPitch, src + y * kCameraWidth, kCameraWidth);
-        }
-        ctx_->Unmap(cam_tex_[eye].Get(), 0);
+        ctx_->UpdateSubresource(cam_tex_[eye].Get(), 0, nullptr,
+                                sources[eye], block_row_pitch, 0);
     }
 }
 

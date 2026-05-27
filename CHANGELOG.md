@@ -2,6 +2,15 @@
 
 ### This is not expected to be perfect 1:1 of in headset passthrough at this Alpha stage but it is veeeeery usable. 
 
+## v0.3.1-alpha
+
+**BC4 decompression moved to GPU**
+Camera frames are now uploaded as raw `DXGI_FORMAT_BC4_UNORM` block-compressed data and decompressed entirely by the GPU hardware during texture sampling. The previous per-frame software decode loop (524,288 bytes per eye, every frame) has been removed. This reduces CPU load on the camera thread, eliminates any timing coupling between camera frame delivery and decompression, and has produced a noticeable improvement in perceived latency.
+
+Thanks to the community at the **PSVR2Toolkit Discord** for the nudge in this direction - a contributor who preferred not to be named specifically raised the idea. Much appreciated. And another shoutout to the **psvr2camera** project for making all of this possible.
+
+---
+
 ## v0.3-alpha
 
 **Massive visual quality improvement**
