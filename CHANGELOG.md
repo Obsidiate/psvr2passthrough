@@ -7,6 +7,12 @@
 **BC4 decompression moved to GPU**
 Camera frames are now uploaded as raw `DXGI_FORMAT_BC4_UNORM` block-compressed data and decompressed entirely by the GPU hardware during texture sampling. The previous per-frame software decode loop (524,288 bytes per eye, every frame) has been removed. This reduces CPU load on the camera thread, eliminates any timing coupling between camera frame delivery and decompression, and has produced a noticeable improvement in perceived latency. As a rough estimate, this change reduces overall CPU usage by around 2-5%, and cuts the memory bandwidth consumed by frame processing by more than half - a modest but real benefit on CPU-bound sim rigs.
 
+&nbsp;
+
+**Plain English:** Moved some brain things from CPU to GPU. Picture comes through faster. Less vom vom.
+
+&nbsp;
+
 Thanks to the community at the **PSVR2Toolkit Discord** for the nudge in this direction - a contributor who preferred not to be named specifically raised the idea. Much appreciated. And another shoutout to the **psvr2camera** project for making all of this possible.
 
 ---
