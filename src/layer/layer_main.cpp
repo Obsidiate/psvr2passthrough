@@ -2,6 +2,7 @@
 #include "layer_session.h"
 #include "logging.h"
 
+#include <chrono>
 #include <cstring>
 #include <vector>
 
@@ -127,6 +128,7 @@ XrResult XRAPI_CALL pt_xrGetInstanceProcAddr(XrInstance instance,
     if (match("xrDestroyInstance",         pt_xrDestroyInstance))       return XR_SUCCESS;
     if (match("xrCreateSession",           pt_xrCreateSession))         return XR_SUCCESS;
     if (match("xrDestroySession",          pt_xrDestroySession))        return XR_SUCCESS;
+    if (match("xrBeginSession",            pt_xrBeginSession))          return XR_SUCCESS;
     if (match("xrWaitFrame",               pt_xrWaitFrame))             return XR_SUCCESS;
     if (match("xrEndFrame",                pt_xrEndFrame))              return XR_SUCCESS;
 
@@ -192,6 +194,9 @@ XrResult XRAPI_CALL pt_xrCreateSession(XrInstance instance,
         cc.unsharp_radius           = state->config.unsharp_radius;
         cc.apply_undistortion       = state->config.apply_undistortion;
         cc.zoom_factor              = state->config.zoom_factor;
+        cc.reprojection_enabled     = state->config.reprojection_enabled;
+        state->session->set_camera_latency_offset_ns(state->config.camera_latency_offset_ns);
+        state->session->set_debug_reproj_stats(state->config.debug_reprojection_stats);
         cc.camera_toe_out_rad_l     = state->config.camera_toe_out_rad_l;
         cc.camera_tilt_down_rad_l   = state->config.camera_tilt_down_rad_l;
         cc.camera_roll_rad_l        = state->config.camera_roll_rad_l;
@@ -217,7 +222,24 @@ XrResult XRAPI_CALL pt_xrDestroySession(XrSession session) {
 }
 
 // ===========================================================================
-// xrWaitFrame — intercept to log timing around the frame-start gate.
+// xrBeginSession — cache view config type for xrLocateViews calls.
+// ===========================================================================
+
+XrResult XRAPI_CALL pt_xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) {
+    auto* state = LayerState::get().find_for_session(session);
+    if (!state || !state->next.xrBeginSession) return XR_ERROR_HANDLE_INVALID;
+
+    const XrResult r = state->next.xrBeginSession(session, beginInfo);
+    if (XR_SUCCEEDED(r) && beginInfo) {
+        state->view_config_type = beginInfo->primaryViewConfigurationType;
+        if (state->session)
+            state->session->set_view_config_type(beginInfo->primaryViewConfigurationType);
+    }
+    return r;
+}
+
+// ===========================================================================
+// xrWaitFrame — update clock calibration offset for reprojection timestamps.
 // ===========================================================================
 
 XrResult XRAPI_CALL pt_xrWaitFrame(XrSession session,
@@ -226,7 +248,14 @@ XrResult XRAPI_CALL pt_xrWaitFrame(XrSession session,
     auto* state = LayerState::get().find_for_session(session);
     if (!state || !state->next.xrWaitFrame) return XR_ERROR_HANDLE_INVALID;
 
-    return state->next.xrWaitFrame(session, frameWaitInfo, frameState);
+    const XrResult r = state->next.xrWaitFrame(session, frameWaitInfo, frameState);
+    if (XR_SUCCEEDED(r) && frameState && state->session) {
+        const int64_t steady_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+        state->session->update_clock_offset(
+            static_cast<int64_t>(frameState->predictedDisplayTime) - steady_ns);
+    }
+    return r;
 }
 
 // ===========================================================================

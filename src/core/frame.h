@@ -18,12 +18,20 @@ inline constexpr int kBC4DataSize = (kCameraWidth / 4) * (kCameraHeight / 4) * 8
 
 enum class CameraId : int { Left = 0, Right = 1 };
 
+// Head orientation and position as reported by the PSVR2 driver at capture time.
+struct Pose3f {
+    float px = 0, py = 0, pz = 0;
+    float qx = 0, qy = 0, qz = 0, qw = 1;
+    bool  valid = false;
+};
+
 struct StereoFrame {
     // BC4_UNORM compressed bytes, kBC4DataSize per eye.
     std::vector<uint8_t> left;
     std::vector<uint8_t> right;
     std::chrono::steady_clock::time_point captured_at{};
     uint64_t sequence = 0;
+    Pose3f   captured_pose{};
 
     [[nodiscard]] bool valid() const noexcept {
         return left.size() == static_cast<size_t>(kBC4DataSize)

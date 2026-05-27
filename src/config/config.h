@@ -2,6 +2,7 @@
 
 #include "input_binding.h"
 
+#include <cstdint>
 #include <string>
 #include <filesystem>
 
@@ -34,6 +35,11 @@ struct Config {
     // Undistortion.
     bool  apply_undistortion   = true;
     float zoom_factor          = 1.0f;
+
+    // Reprojection: experimental, off by default.
+    bool    reprojection_enabled     = false;
+    int64_t camera_latency_offset_ns = 16'000'000;  // USB+exposure latency estimate (ns); tune empirically
+    bool    debug_reprojection_stats = false;         // log 1Hz aggregated reprojection stats
 
     // Camera stereo geometry corrections.
     // When camera_eyes_linked is true the right-eye values are derived from the

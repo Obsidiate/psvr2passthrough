@@ -53,6 +53,7 @@ struct InstanceState {
     InstanceDispatch                 next{};
     std::unique_ptr<LayerSession>    session;            // 1 session per instance in practice
     Config                           config{};           // loaded once at instance creation
+    XrViewConfigurationType          view_config_type{XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO};
 };
 
 // Singleton-ish global instance table. OpenXR allows multiple instances per
@@ -95,6 +96,7 @@ XrResult XRAPI_CALL pt_xrCreateSession(XrInstance instance,
                                        const XrSessionCreateInfo* createInfo,
                                        XrSession* session);
 XrResult XRAPI_CALL pt_xrDestroySession(XrSession session);
+XrResult XRAPI_CALL pt_xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo);
 XrResult XRAPI_CALL pt_xrWaitFrame(XrSession session,
                                     const XrFrameWaitInfo* frameWaitInfo,
                                     XrFrameState* frameState);

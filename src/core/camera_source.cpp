@@ -7,6 +7,7 @@
 #include <ctime>
 #include <fstream>
 #include <iomanip>
+#include <thread>
 
 namespace psvr2pt {
 
@@ -112,13 +113,19 @@ void CameraSource::thread_loop() {
     staging.right.resize(kBC4DataSize);
 
     while (running_.load()) {
+        Pose3f frame_pose{};
         const bool ok = copy_latest_image_buffer(
             impl_->shm,
             staging.left.data(),
             staging.right.data(),
             kBC4DataSize,
-            /*timeout_ms=*/50);
-        if (!ok) continue;
+            /*timeout_ms=*/50,
+            &frame_pose);
+        if (!ok) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            continue;
+        }
+        staging.captured_pose = frame_pose;
 
         staging.captured_at = std::chrono::steady_clock::now();
         staging.sequence    = ++last_seq_;
@@ -127,8 +134,9 @@ void CameraSource::thread_loop() {
             std::lock_guard lock(front_mutex_);
             front_.left.swap(staging.left);
             front_.right.swap(staging.right);
-            front_.captured_at = staging.captured_at;
-            front_.sequence    = staging.sequence;
+            front_.captured_at   = staging.captured_at;
+            front_.sequence      = staging.sequence;
+            front_.captured_pose = staging.captured_pose;
             staging.left.resize(kBC4DataSize);
             staging.right.resize(kBC4DataSize);
         }
@@ -146,10 +154,16 @@ bool CameraSource::try_get_latest(StereoFrame& out) {
     // faster than the camera driver delivers frames.
     out.left.swap(front_.left);
     out.right.swap(front_.right);
-    out.captured_at = front_.captured_at;
-    out.sequence    = front_.sequence;
+    out.captured_at   = front_.captured_at;
+    out.sequence      = front_.sequence;
+    out.captured_pose = front_.captured_pose;
     have_frame_.store(false);
     return true;
+}
+
+bool CameraSource::get_latest_pose(Pose3f& out) const {
+    if (!impl_ || !impl_->shm.imageMemBase) return false;
+    return read_latest_pose(impl_->shm, out);
 }
 
 const CameraIntrinsics& CameraSource::intrinsics(CameraId id) const {

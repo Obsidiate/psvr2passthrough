@@ -25,7 +25,7 @@ VSOut main(VSIn input)
 
 // Full-frame passthrough with brightness, contrast, and unsharp masking.
 // cb0: params  = {global_alpha, brightness, contrast, unsharp_amount}
-//      params2 = {unsharp_step (radius/tex_width in UV space), 0, 0, 0}
+//      params2 = {unsharp_step, 0, 0, 0}
 constexpr const char* kPixelShader = R"HLSL(
 Texture2D    src     : register(t0);
 SamplerState smp     : register(s0);

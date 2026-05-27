@@ -4,6 +4,7 @@
 
 #include <cmath>
 
+
 namespace psvr2pt {
 
 LayerSession::LayerSession(XrSession xr_session,
@@ -120,7 +121,18 @@ LayerSession::compose_layer(const XrFrameEndInfo* original) {
     if (!passthrough_visible_) return nullptr;
 
     static uint64_t frame_n = 0;
-    if (++frame_n % 300 == 0) PT_LOG_INFO("compose_layer frame {}", frame_n);
+    static uint64_t last_log_seq = 0;
+    static auto     last_log_time = std::chrono::steady_clock::now();
+    ++frame_n;
+    if (frame_n % 300 == 0) {
+        const uint64_t seq_now  = cached_frame_.sequence;
+        const auto     now      = std::chrono::steady_clock::now();
+        const double   elapsed  = std::chrono::duration<double>(now - last_log_time).count();
+        const double   cam_fps  = (elapsed > 0.0) ? (seq_now - last_log_seq) / elapsed : 0.0;
+        PT_LOG_INFO("compose_layer frame {} | camera seq={} fps={:.1f}", frame_n, seq_now, cam_fps);
+        last_log_seq  = seq_now;
+        last_log_time = now;
+    }
 
     const XrCompositionLayerProjection* game_proj = nullptr;
     for (uint32_t i = 0; i < original->layerCount; ++i) {
@@ -140,8 +152,115 @@ LayerSession::compose_layer(const XrFrameEndInfo* original) {
     // try_get_latest swaps new data into cached_frame_, donating its old buffers
     // back to the producer for recycling. If no new frame arrived this tick we
     // reuse the last valid one rather than dropping passthrough entirely.
-    camera_->try_get_latest(cached_frame_);
+    const bool new_camera_frame = camera_->try_get_latest(cached_frame_);
     if (!cached_frame_.valid()) return nullptr;
+
+    // Determine captured_eye_pose_ for layer submission.
+    // When reprojection is enabled, locate views at the camera capture timestamp so
+    // the compositor's ATW warps from the measured past moment to scanout time.
+    // When new_camera_frame is false the cached pose is reused unchanged — both
+    // display frames consuming one camera image get the same capture-time pose,
+    // giving ATW smooth per-scanout warp deltas instead of a ghosting differential.
+    if (new_camera_frame || !has_captured_eye_pose_) {
+        if (config_.reprojection_enabled) {
+            const int64_t offset = clock_offset_ns_.load(std::memory_order_relaxed);
+            const int64_t steady_capture_ns =
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    cached_frame_.captured_at.time_since_epoch()).count();
+            // clock_offset includes the runtime display prediction window (~8ms typical)
+            // as a constant bias; absorbed into camera_latency_offset_ns_ during tuning.
+            // Frame-to-frame variance in the prediction interval is a residual noise
+            // floor that cannot be eliminated without the KHR QPC extension.
+            const XrTime xr_capture = static_cast<XrTime>(
+                steady_capture_ns + offset - camera_latency_offset_ns_);
+
+            XrViewLocateInfo vli{XR_TYPE_VIEW_LOCATE_INFO};
+            vli.viewConfigurationType = view_config_type_;
+            vli.displayTime           = xr_capture;
+            vli.space                 = game_proj->space;
+
+            XrViewState vs{XR_TYPE_VIEW_STATE};
+            std::array<XrView, 2> located_views{};
+            located_views[0].type = XR_TYPE_VIEW;
+            located_views[1].type = XR_TYPE_VIEW;
+            uint32_t view_count_out = 0;
+            const XrResult lr = dispatch_->xrLocateViews(
+                session_, &vli, &vs, 2, &view_count_out, located_views.data());
+
+            constexpr uint32_t kBothValid =
+                XR_VIEW_STATE_POSITION_VALID_BIT | XR_VIEW_STATE_ORIENTATION_VALID_BIT;
+            if (XR_SUCCEEDED(lr) && (vs.viewStateFlags & kBothValid) == kBothValid) {
+                for (uint32_t e = 0; e < 2; ++e)
+                    captured_eye_pose_[e] = located_views[e].pose;
+                has_captured_eye_pose_ = true;
+
+                if (!reproj_probe_logged_) {
+                    reproj_probe_logged_ = true;
+                    const double dpx = located_views[0].pose.position.x - game_proj->views[0].pose.position.x;
+                    const double dpy = located_views[0].pose.position.y - game_proj->views[0].pose.position.y;
+                    const double dpz = located_views[0].pose.position.z - game_proj->views[0].pose.position.z;
+                    PT_LOG_INFO("Reprojection probe OK: xrLocateViews accepted past timestamp. "
+                                "clock_offset_ns={} camera_latency_offset_ns={} "
+                                "display_minus_capture={:.1f}ms "
+                                "capture_vs_game_pos_delta=({:.4f},{:.4f},{:.4f}). "
+                                "clock_offset includes ~8ms display prediction window bias. "
+                                "Effective lookup = captured_at + clock_offset - camera_latency_offset. "
+                                "Tune camera_latency_offset for USB+exposure latency and prediction bias. "
+                                "Empirical optimum far from 16ms indicates different actual bias composition.",
+                                offset, camera_latency_offset_ns_,
+                                (static_cast<double>(original->displayTime) - static_cast<double>(xr_capture)) / 1.0e6,
+                                dpx, dpy, dpz);
+                }
+
+                if (debug_reproj_stats_) {
+                    const double delta_ms =
+                        (static_cast<double>(original->displayTime) - static_cast<double>(xr_capture)) / 1.0e6;
+                    reproj_stat_delta_sum_ += delta_ms;
+                    if (delta_ms > reproj_stat_delta_max_) reproj_stat_delta_max_ = delta_ms;
+                    ++reproj_stat_count_;
+                }
+            } else {
+                // xrLocateViews failed or returned invalid flags — runtime history window
+                // may not extend to xr_capture. Fall back to game predicted pose.
+                for (uint32_t e = 0; e < 2 && e < game_proj->viewCount; ++e)
+                    captured_eye_pose_[e] = game_proj->views[e].pose;
+                has_captured_eye_pose_ = true;
+                ++reproj_invalid_total_;
+                if (debug_reproj_stats_) ++reproj_stat_invalid_;
+                if (reproj_invalid_total_ == 1 || reproj_invalid_total_ % 100 == 0) {
+                    PT_LOG_WARN("xrLocateViews invalid pose (result={} flags={:#x}) - "
+                                "falling back to game pose (count={}). "
+                                "Reduce camera_latency_offset_ns or check runtime history window.",
+                                static_cast<int>(lr),
+                                static_cast<uint32_t>(vs.viewStateFlags),
+                                reproj_invalid_total_);
+                }
+            }
+        } else {
+            // Reprojection disabled: snapshot game predicted pose for layer submission.
+            for (uint32_t e = 0; e < 2 && e < game_proj->viewCount; ++e)
+                captured_eye_pose_[e] = game_proj->views[e].pose;
+            has_captured_eye_pose_ = true;
+        }
+    }
+
+    if (debug_reproj_stats_) {
+        const auto stats_now = std::chrono::steady_clock::now();
+        if (!reproj_stat_initialized_) {
+            reproj_stat_epoch_       = stats_now;
+            reproj_stat_initialized_ = true;
+        } else if (std::chrono::duration<double>(stats_now - reproj_stat_epoch_).count() >= 1.0) {
+            const double mean_ms = (reproj_stat_count_ > 0)
+                ? reproj_stat_delta_sum_ / static_cast<double>(reproj_stat_count_) : 0.0;
+            PT_LOG_INFO("Reproj stats: locate_ok={} mean_delta={:.1f}ms max_delta={:.1f}ms invalid={}",
+                        reproj_stat_count_, mean_ms, reproj_stat_delta_max_, reproj_stat_invalid_);
+            reproj_stat_count_     = 0;
+            reproj_stat_delta_sum_ = 0.0;
+            reproj_stat_delta_max_ = 0.0;
+            reproj_stat_invalid_   = 0;
+            reproj_stat_epoch_     = stats_now;
+        }
+    }
 
     compositor_->upload_frame(cached_frame_);
     compositor_->render(config_);
@@ -182,8 +301,23 @@ LayerSession::compose_layer(const XrFrameEndInfo* original) {
         cam_fov.angleUp    =  std::atan(static_cast<float>(intr.cy)        * zoom / static_cast<float>(intr.fy));
         cam_fov.angleDown  = -std::atan((H_f - static_cast<float>(intr.cy)) * zoom / static_cast<float>(intr.fy));
 
+        // Use the OpenXR eye pose captured at camera-frame-arrive time.
+        // ATW corrects for the rotation delta between that snapshot and actual
+        // display time. If no snapshot yet, fall back to the current predicted pose.
+        const XrPosef layer_pose = (has_captured_eye_pose_ && config_.reprojection_enabled)
+                                 ? captured_eye_pose_[eye]
+                                 : game_proj->views[eye].pose;
+
+        if (frame_n % 300 == 0) {
+            PT_LOG_INFO("Passthrough pose submit: new_frame={} pos=({:.3f},{:.3f},{:.3f}) ori=({:.3f},{:.3f},{:.3f},{:.3f})",
+                        new_camera_frame,
+                        layer_pose.position.x, layer_pose.position.y, layer_pose.position.z,
+                        layer_pose.orientation.x, layer_pose.orientation.y,
+                        layer_pose.orientation.z, layer_pose.orientation.w);
+        }
+
         projection_views_[eye] = { XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW };
-        projection_views_[eye].pose = game_proj->views[eye].pose;
+        projection_views_[eye].pose = layer_pose;
         projection_views_[eye].fov  = cam_fov;
         projection_views_[eye].subImage.swapchain        = swapchains_[eye].handle;
         projection_views_[eye].subImage.imageArrayIndex  = 0;

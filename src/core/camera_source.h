@@ -30,6 +30,10 @@ public:
     // Non-blocking. Returns false if no frame has been received yet.
     bool try_get_latest(StereoFrame& out);
 
+    // Non-blocking. Reads the most recent driver pose from shared memory.
+    // Safe to call from any thread while the source is running.
+    bool get_latest_pose(Pose3f& out) const;
+
     // Calibration is fetched once at start; safe to call any time afterwards.
     const CameraIntrinsics& intrinsics(CameraId id) const;
     const CameraParameters& params(CameraId id)     const;

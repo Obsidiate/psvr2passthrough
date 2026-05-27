@@ -13,6 +13,7 @@
 
 #include <wrl/client.h>
 #include <atomic>
+#include <chrono>
 #include <vector>
 #include <array>
 #include <memory>
@@ -42,6 +43,10 @@ public:
     }
     void set_toggle_mode(bool t) { toggle_mode_ = t; }
     void set_force_on(bool f)    { force_on_ = f; }
+    void update_clock_offset(int64_t ns)                 { clock_offset_ns_.store(ns, std::memory_order_relaxed); }
+    void set_view_config_type(XrViewConfigurationType t) { view_config_type_ = t; }
+    void set_camera_latency_offset_ns(int64_t ns)        { camera_latency_offset_ns_ = ns; }
+    void set_debug_reproj_stats(bool v)                  { debug_reproj_stats_ = v; }
 
 private:
     bool ensure_swapchain_(uint32_t width, uint32_t height);
@@ -78,6 +83,30 @@ private:
     std::array<XrCompositionLayerProjectionView, 2> projection_views_{};
 
     CompositorConfig config_{};
+
+    // OpenXR eye poses captured at the moment each new camera frame arrives.
+    // Submitted as the layer pose so ATW corrects from capture-time orientation
+    // to display-time orientation - entirely in OpenXR space.
+    std::array<XrPosef, 2> captured_eye_pose_{};
+    bool has_captured_eye_pose_ = false;
+
+    // Clock calibration: predictedDisplayTime - steady_clock_ns, updated each xrWaitFrame.
+    // Includes runtime display prediction window bias (~8ms typical); absorbed into
+    // camera_latency_offset_ns_ during empirical tuning.
+    std::atomic<int64_t>    clock_offset_ns_{0};
+    XrViewConfigurationType view_config_type_{XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO};
+    int64_t                 camera_latency_offset_ns_{16'000'000};
+    bool                    debug_reproj_stats_{false};
+
+    // Reprojection probe and 1Hz stats state.
+    bool    reproj_probe_logged_     = false;
+    int64_t reproj_invalid_total_    = 0;
+    bool    reproj_stat_initialized_ = false;
+    int64_t reproj_stat_count_       = 0;
+    int64_t reproj_stat_invalid_     = 0;
+    double  reproj_stat_delta_sum_   = 0.0;
+    double  reproj_stat_delta_max_   = 0.0;
+    std::chrono::steady_clock::time_point reproj_stat_epoch_{};
 
     bool ready_ = false;
 };

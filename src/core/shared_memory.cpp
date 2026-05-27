@@ -1,7 +1,7 @@
 #include "shared_memory.h"
-#include "frame.h"
 #include "logging.h"
 
+#include <cmath>
 #include <cstring>
 
 namespace psvr2pt {
@@ -43,6 +43,46 @@ struct CameraConfig {
     uint32_t zeros[6];
 };
 #pragma pack(pop)
+
+// Extracts the SLAM-corrected head pose from a slot info block.
+// Layout (starting at kSlotStatusOff[i], read as float array):
+//   float[3..5]  = base position (x, y, z)
+//   float[6..9]  = base quaternion (x, y, z, w)
+//   float[10..12]= SLAM correction position offset (in local camera space)
+//   float[13..16]= SLAM correction quaternion (x, y, z, w)
+static Pose3f extract_pose(const char* slot_base) {
+    const float* fp = reinterpret_cast<const float*>(slot_base);
+
+    const float bpx = fp[3], bpy = fp[4], bpz = fp[5];
+    const float bqx = fp[6], bqy = fp[7], bqz = fp[8], bqw = fp[9];
+
+    const float dx = fp[10], dy = fp[11], dz = fp[12];
+    const float dqx = fp[13], dqy = fp[14], dqz = fp[15], dqw = fp[16];
+
+    // Rotate SLAM offset position by base quaternion: v' = q*v*q_inv
+    const float tx = 2.0f * (bqy * dz - bqz * dy);
+    const float ty = 2.0f * (bqz * dx - bqx * dz);
+    const float tz = 2.0f * (bqx * dy - bqy * dx);
+
+    Pose3f out;
+    out.px = bpx + dx + bqw * tx + bqy * tz - bqz * ty;
+    out.py = bpy + dy + bqw * ty + bqz * tx - bqx * tz;
+    out.pz = bpz + dz + bqw * tz + bqx * ty - bqy * tx;
+
+    // Final quaternion: q_final = q_base * q_slam (Hamilton product)
+    out.qx = bqw*dqx + bqx*dqw + bqy*dqz - bqz*dqy;
+    out.qy = bqw*dqy - bqx*dqz + bqy*dqw + bqz*dqx;
+    out.qz = bqw*dqz + bqx*dqy - bqy*dqx + bqz*dqw;
+    out.qw = bqw*dqw - bqx*dqx - bqy*dqy - bqz*dqz;
+
+    const float len = std::sqrt(out.qx*out.qx + out.qy*out.qy +
+                                out.qz*out.qz + out.qw*out.qw);
+    if (len > 1e-6f) {
+        out.qx /= len; out.qy /= len; out.qz /= len; out.qw /= len;
+    }
+    out.valid = true;
+    return out;
+}
 
 void setup_shared_memory(SharedMemoryData& data) {
     data.hMapFile = OpenFileMappingA(FILE_MAP_READ, FALSE, names::kFileMapping);
@@ -125,7 +165,8 @@ bool copy_latest_image_buffer(SharedMemoryData& data,
                               void* leftCameraData,
                               void* rightCameraData,
                               size_t cameraDataSize,
-                              DWORD timeout_ms) {
+                              DWORD timeout_ms,
+                              Pose3f* out_pose) {
     if (!data.imageMemBase || !data.hImageEvent || !data.hImageMutex) return false;
 
     if (WaitForSingleObject(data.hImageEvent, timeout_ms) != WAIT_OBJECT_0) return false;
@@ -155,6 +196,18 @@ bool copy_latest_image_buffer(SharedMemoryData& data,
         return false;
     }
 
+    // Skip if this is the same frame we already copied - the image event is a
+    // manual-reset that stays permanently signaled, so without this check the
+    // thread would spin re-reading stale data at ~50,000 iterations/second.
+    if (latestTimestamp == data.last_copied_ts) {
+        ReleaseMutex(data.hImageMutex);
+        return false;
+    }
+    data.last_copied_ts = latestTimestamp;
+
+    if (out_pose)
+        *out_pose = extract_pose(data.imageMemBase + layout::kSlotStatusOff[latestIndex]);
+
     const char* slot = data.imageMemBase
                      + layout::kImageBufOffset
                      + latestIndex * layout::kPerSlotStride;
@@ -163,6 +216,30 @@ bool copy_latest_image_buffer(SharedMemoryData& data,
     std::memcpy(rightCameraData, slot + cameraDataSize, cameraDataSize);
 
     ReleaseMutex(data.hImageMutex);
+    return true;
+}
+
+bool read_latest_pose(SharedMemoryData& data, Pose3f& out_pose) {
+    if (!data.imageMemBase) return false;
+
+    uint32_t latestTimestamp = 0;
+    int      latestIndex     = -1;
+
+    for (size_t i = 0; i < layout::kNumSlots; ++i) {
+        const int status = *reinterpret_cast<const int*>(
+            data.imageMemBase + layout::kSlotStatusOff[i]);
+        if (static_cast<unsigned>(status - 1) >= 2) continue;
+
+        const uint32_t ts = *reinterpret_cast<const uint32_t*>(
+            data.imageMemBase + layout::kSlotTimestampOff[i]);
+        if (latestIndex < 0 || ts > latestTimestamp) {
+            latestTimestamp = ts;
+            latestIndex     = static_cast<int>(i);
+        }
+    }
+
+    if (latestIndex < 0) return false;
+    out_pose = extract_pose(data.imageMemBase + layout::kSlotStatusOff[latestIndex]);
     return true;
 }
 

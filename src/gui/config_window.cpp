@@ -1,7 +1,9 @@
 #include "config_window.h"
+#include "version.h"
 
 #include <imgui.h>
 #include <windows.h>
+#include <shellapi.h>
 #include <filesystem>
 #include <fstream>
 #include <cstring>
@@ -11,6 +13,13 @@
 namespace psvr2pt {
 
 namespace {
+
+static void open_url(const char* url) {
+    int wlen = MultiByteToWideChar(CP_UTF8, 0, url, -1, nullptr, 0);
+    std::wstring wurl(wlen, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, url, -1, wurl.data(), wlen);
+    ShellExecuteW(nullptr, L"open", wurl.c_str(), nullptr, nullptr, SW_SHOW);
+}
 
 // Hint text rendered in the disabled colour and wrapped to the available column width.
 static void TextHint(const char* text) {
@@ -59,11 +68,13 @@ void ConfigWindow::initialise(ID3D11Device* device, ID3D11DeviceContext* ctx) {
     on_disk_  = load_config();
     working_  = on_disk_;
     dirty_    = false;
-    capturer_.open_devices();   // open DInput devices now so they are warm
+    capturer_.open_devices();
+    update_checker_.start(kCurrentVersion);
 }
 
 void ConfigWindow::shutdown() {
     capturer_.close_devices();
+    update_checker_.shutdown();
 }
 
 void ConfigWindow::draw() {
@@ -78,6 +89,7 @@ void ConfigWindow::draw() {
 
     ImGui::TextUnformatted("PSVR2 Passthrough Layer — Configuration");
     ImGui::Separator();
+    draw_update_banner();
     TextHint("Changes apply when your sim next starts. Save then restart your sim.");
     ImGui::Spacing();
 
@@ -113,6 +125,58 @@ void ConfigWindow::draw() {
             capturing_ = false;
         }
     }
+}
+
+void ConfigWindow::draw_update_banner() {
+    const UpdateChecker::State state = update_checker_.state();
+    if (state == UpdateChecker::State::Pending)
+        return;
+
+    ImDrawList*  dl     = ImGui::GetWindowDrawList();
+    ImGuiStyle&  sty    = ImGui::GetStyle();
+    const ImVec2 p      = ImGui::GetCursorScreenPos();
+    const float  avail  = ImGui::GetContentRegionAvail().x;
+    const float  row_h  = ImGui::GetFrameHeight();
+
+    ImVec4      bg, fg;
+    std::string msg;
+    const char* btn_label = nullptr;
+    const char* btn_url   = nullptr;
+    if (state == UpdateChecker::State::Available) {
+        bg        = {0.35f, 0.25f, 0.00f, 1.0f};
+        fg        = {1.00f, 0.85f, 0.10f, 1.0f};
+        msg       = "New version available: " + update_checker_.latest_tag();
+        btn_label = "Open releases page";
+        btn_url   = kReleasesUrl;
+    } else if (state == UpdateChecker::State::UpToDate) {
+        bg        = {0.05f, 0.25f, 0.05f, 1.0f};
+        fg        = {0.40f, 1.00f, 0.50f, 1.0f};
+        msg       = "Latest version installed!";
+        btn_label = "View on GitHub";
+        btn_url   = kRepoUrl;
+    } else {
+        bg        = {0.30f, 0.10f, 0.10f, 1.0f};
+        fg        = {1.00f, 0.55f, 0.55f, 1.0f};
+        msg       = "Update check failed.";
+        btn_label = "Open releases page";
+        btn_url   = kReleasesUrl;
+    }
+
+    dl->AddRectFilled(p, {p.x + avail, p.y + row_h},
+                      ImGui::ColorConvertFloat4ToU32(bg));
+
+    ImGui::SetCursorScreenPos({p.x + sty.ItemSpacing.x, p.y + sty.FramePadding.y});
+    ImGui::PushStyleColor(ImGuiCol_Text, fg);
+    ImGui::TextUnformatted(msg.c_str());
+    ImGui::PopStyleColor();
+    if (btn_label) {
+        ImGui::SameLine();
+        if (ImGui::SmallButton(btn_label))
+            open_url(btn_url);
+    }
+
+    ImGui::SetCursorScreenPos({p.x, p.y + row_h});
+    ImGui::Spacing();
 }
 
 void ConfigWindow::draw_main_panel() {
@@ -238,6 +302,15 @@ void ConfigWindow::draw_main_panel() {
     ImGui::Checkbox("Apply lens undistortion", &working_.apply_undistortion);
     ImGui::SliderFloat("Zoom factor", &working_.zoom_factor, 0.5f, 4.0f, "%.2f");
     TextHint("Higher zoom = narrower FOV, fewer lens artefacts at edges.");
+    ImGui::Spacing();
+
+    // -----------------------------------------------------------------------
+    ImGui::SeparatorText("Reprojection (Experimental)");
+    ImGui::Checkbox("Enable reprojection", &working_.reprojection_enabled);
+    TextHint("EXPERIMENTAL - off by default. Submits a historically-measured head pose");
+    TextHint("to SteamVR ATW to reduce motion lag. Currently causes shimmering edge");
+    TextHint("artefacts on fast head movement. The likely fix (frame interpolation)");
+    TextHint("may have too high a performance cost. Treat as a preview only.");
     ImGui::Spacing();
 
     // -----------------------------------------------------------------------
@@ -370,6 +443,12 @@ void ConfigWindow::draw_binding_capture_button() {
 
 void ConfigWindow::draw_about_panel() {
     ImGui::SeparatorText("About");
+    ImGui::Text("Version: %s", kCurrentVersion);
+    TextHint("Alpha - feedback welcome:");
+    ImGui::TextLinkOpenURL("GitHub Discussions", kDiscussionsUrl);
+    ImGui::SameLine();
+    ImGui::TextLinkOpenURL("/r/psvr2passthrough", kSubredditUrl);
+    ImGui::Spacing();
     ImGui::TextWrapped(
         "This configurator writes settings to a JSON file the layer reads "
         "once at start-up. Changes take effect when you next launch your sim.");

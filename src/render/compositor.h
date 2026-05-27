@@ -30,6 +30,7 @@ struct CompositorConfig {
     float unsharp_radius         = 1.5f;
     bool  apply_undistortion      = true;
     float zoom_factor             = 1.0f;
+    bool  reprojection_enabled    = true;
     float camera_toe_out_rad_l   =  0.32f;
     float camera_tilt_down_rad_l =  0.48f;
     float camera_roll_rad_l      = -0.1745f;

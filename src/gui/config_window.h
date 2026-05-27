@@ -2,6 +2,7 @@
 
 #include "config.h"
 #include "input_binding.h"
+#include "update_checker.h"
 
 #include <d3d11.h>
 #include <memory>
@@ -24,6 +25,7 @@ private:
     void draw_main_panel();
     void draw_about_panel();
     void draw_binding_capture_button();
+    void draw_update_banner();
 
     Config working_;
     Config on_disk_;
@@ -33,13 +35,14 @@ private:
 
     // Binding capture state.
     bool               capturing_    = false;
-    std::string        capture_label_;          // "Listening..." countdown label
+    std::string        capture_label_;
     BindingCapturer    capturer_;
 
     ID3D11Device*        device_ = nullptr;
     ID3D11DeviceContext* ctx_    = nullptr;
 
-    std::string intrinsics_text_;   // cached snippet from calibration_dump.txt
+    std::string   intrinsics_text_;   // cached snippet from calibration_dump.txt
+    UpdateChecker update_checker_;
 };
 
 }  // namespace psvr2pt
