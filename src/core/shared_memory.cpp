@@ -161,6 +161,45 @@ bool get_distortion_config(SharedMemoryData& data,
     return found;
 }
 
+bool get_camera_extrinsics(SharedMemoryData& data, CameraExtrinsic out[3]) {
+    if (!data.imageMemBase) return false;
+
+    HANDLE hCalib = OpenMutexA(SYNCHRONIZE, FALSE, names::kCalibMutex);
+    if (!hCalib) return false;
+
+    if (WaitForSingleObject(hCalib, 5000) != WAIT_OBJECT_0) {
+        CloseHandle(hCalib);
+        return false;
+    }
+
+#pragma pack(push, 1)
+    struct RawTransform {
+        uint8_t from_id;
+        uint8_t to_id;
+        uint8_t pad[2];
+        float   mat[9];
+        float   pos[3];
+    };
+#pragma pack(pop)
+
+    const size_t transforms_offset =
+        layout::kCalibBaseOff + 4 * sizeof(CameraConfig);
+
+    const auto* raw = reinterpret_cast<const RawTransform*>(
+        data.imageMemBase + transforms_offset);
+
+    for (int i = 0; i < 3; ++i) {
+        out[i].from_id = static_cast<int>(raw[i].from_id);
+        out[i].to_id   = static_cast<int>(raw[i].to_id);
+        for (int j = 0; j < 9; ++j) out[i].mat[j] = raw[i].mat[j];
+        for (int j = 0; j < 3; ++j) out[i].pos[j] = raw[i].pos[j];
+    }
+
+    ReleaseMutex(hCalib);
+    CloseHandle(hCalib);
+    return true;
+}
+
 bool copy_latest_image_buffer(SharedMemoryData& data,
                               void* leftCameraData,
                               void* rightCameraData,

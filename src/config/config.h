@@ -41,6 +41,13 @@ struct Config {
     int64_t camera_latency_offset_ns = 16'000'000;  // USB+exposure latency estimate (ns); tune empirically
     bool    debug_reprojection_stats = false;         // log 1Hz aggregated reprojection stats
 
+    // Dynamic IPD alignment.
+    // Compensates for the lateral offset between each fixed camera and the corresponding
+    // eye/lens position when the user adjusts the headset IPD slider.
+    // camera_separation_mm is the physical centre-to-centre distance of the two cameras.
+    bool  ipd_correction_enabled = true;
+    float camera_separation_mm   = 80.0f;
+
     // Camera stereo geometry corrections.
     // When camera_eyes_linked is true the right-eye values are derived from the
     // left-eye values (toe/roll negated, tilt copied) and are not saved separately.

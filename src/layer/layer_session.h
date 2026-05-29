@@ -47,6 +47,10 @@ public:
     void set_view_config_type(XrViewConfigurationType t) { view_config_type_ = t; }
     void set_camera_latency_offset_ns(int64_t ns)        { camera_latency_offset_ns_ = ns; }
     void set_debug_reproj_stats(bool v)                  { debug_reproj_stats_ = v; }
+    void set_ipd_correction(bool enabled, float camera_sep_mm) {
+        ipd_correction_enabled_ = enabled;
+        camera_separation_m_    = camera_sep_mm / 1000.f;
+    }
 
 private:
     bool ensure_swapchain_(uint32_t width, uint32_t height);
@@ -97,6 +101,11 @@ private:
     XrViewConfigurationType view_config_type_{XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO};
     int64_t                 camera_latency_offset_ns_{16'000'000};
     bool                    debug_reproj_stats_{false};
+
+    // IPD correction state.
+    bool  ipd_correction_enabled_ = false;
+    float camera_separation_m_    = 0.080f;
+    float last_ipd_m_             = -1.f;   // sentinel — forces update on first frame
 
     // Reprojection probe and 1Hz stats state.
     bool    reproj_probe_logged_     = false;

@@ -3,6 +3,7 @@
 #include "logging.h"
 
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <ctime>
 #include <fstream>
@@ -39,6 +40,21 @@ bool CameraSource::start() {
                         eye, params_[eye].coeffs[0], params_[eye].coeffs[1],
                         params_[eye].coeffs[2], params_[eye].coeffs[3]);
         }
+    }
+
+    CameraExtrinsic extrinsics[3]{};
+    const bool has_extrinsics = get_camera_extrinsics(impl_->shm, extrinsics);
+    if (has_extrinsics) {
+        for (int i = 0; i < 3; ++i) {
+            const float* p = extrinsics[i].pos;
+            const float  mag = std::sqrt(p[0]*p[0] + p[1]*p[1] + p[2]*p[2]);
+            PT_LOG_INFO("CameraSource extrinsic[{}]: cam{}->cam{}  "
+                        "pos=({:.4f},{:.4f},{:.4f}) |pos|={:.4f}",
+                        i, extrinsics[i].from_id, extrinsics[i].to_id,
+                        p[0], p[1], p[2], mag);
+        }
+    } else {
+        PT_LOG_WARN("CameraSource: failed to read camera extrinsics");
     }
 
     // Write calibration_dump.txt — created fresh each session so it always
@@ -83,6 +99,29 @@ bool CameraSource::start() {
             }
             if (20 % 4 != 0) f << "\n";
             f << "\n";
+        }
+
+        // Inter-camera extrinsics
+        f << "=== Inter-camera Extrinsics (unverified units/convention) ===\n";
+        if (has_extrinsics) {
+            for (int i = 0; i < 3; ++i) {
+                const auto& e = extrinsics[i];
+                const float mag = std::sqrt(e.pos[0]*e.pos[0] +
+                                            e.pos[1]*e.pos[1] +
+                                            e.pos[2]*e.pos[2]);
+                f << "Transform[" << i << "]  cam" << e.from_id
+                  << " -> cam" << e.to_id << "\n";
+                f << std::setprecision(6);
+                f << "  pos : (" << e.pos[0] << ", "
+                                 << e.pos[1] << ", "
+                                 << e.pos[2] << ")  |pos| = " << mag << "\n";
+                f << "  mat : [" << e.mat[0] << ", " << e.mat[1] << ", " << e.mat[2] << "]\n";
+                f << "        [" << e.mat[3] << ", " << e.mat[4] << ", " << e.mat[5] << "]\n";
+                f << "        [" << e.mat[6] << ", " << e.mat[7] << ", " << e.mat[8] << "]\n";
+                f << "\n";
+            }
+        } else {
+            f << "  (unavailable)\n\n";
         }
 
         f.flush();

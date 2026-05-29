@@ -145,6 +145,39 @@ LayerSession::compose_layer(const XrFrameEndInfo* original) {
     if (!game_proj || game_proj->viewCount < 2) return nullptr;
     if (game_proj->viewCount != 2 && game_proj->viewCount != 4) return nullptr;
 
+    // Dynamic IPD correction: derive per-eye toe-out delta from the current IPD
+    // reported by the runtime and the known camera physical separation.
+    // The cameras are fixed to the headset body; the lenses/eyes move with the IPD
+    // slider. We use the X-position difference between the game's eye poses as a
+    // proxy for IPD (accurate for a level head; good enough for this correction).
+    if (ipd_correction_enabled_) {
+        const float raw_ipd =
+            game_proj->views[1].pose.position.x -
+            game_proj->views[0].pose.position.x;   // metres
+
+        // Only rebuild the mesh when IPD has shifted by more than 0.5 mm.
+        if (std::abs(raw_ipd - last_ipd_m_) > 0.0005f) {
+            last_ipd_m_ = raw_ipd;
+
+            // Lateral offset: positive = camera is further outward than eye.
+            const float offset  = camera_separation_m_ * 0.5f - raw_ipd * 0.5f;
+            // Angular equivalent at a nominal scene depth of 1 m.
+            const float delta   = std::atan2(offset, 1.0f);
+            config_.ipd_toe_delta_l =  delta;
+            config_.ipd_toe_delta_r = -delta;
+
+            PT_LOG_INFO("IPD correction: ipd={:.1f}mm cam_sep={:.1f}mm "
+                        "offset={:.2f}mm delta={:.4f}rad",
+                        raw_ipd * 1000.f,
+                        camera_separation_m_ * 1000.f,
+                        offset * 1000.f,
+                        delta);
+        }
+    } else {
+        config_.ipd_toe_delta_l = 0.f;
+        config_.ipd_toe_delta_r = 0.f;
+    }
+
     const uint32_t w = static_cast<uint32_t>(kCameraWidth);
     const uint32_t h = static_cast<uint32_t>(kCameraHeight);
     if (!ensure_swapchain_(w, h)) return nullptr;
