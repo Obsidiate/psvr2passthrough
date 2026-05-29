@@ -24,6 +24,8 @@ On first run the layer now logs derived headset geometry (implied toe-out and ti
 
 **Plain English:** Stereo image massively improved - left and right eye alignment is now close to native PSVR2 passthrough. The layer dynamically adjusts as you move the IPD slider on the headset. Assumes virtual panels sit at roughly 700mm (arms-reach distance) for the correction math - works best at that range, still good elsewhere.
 
+**Note:** Some users may notice a slight drop in apparent framerate compared to v0.3.2-alpha. This is being investigated. If you prefer the higher framerate over the improved stereo alignment, v0.3.2-alpha remains available on the releases page.
+
 &nbsp;
 
 ---
