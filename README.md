@@ -7,6 +7,8 @@ Meme courtesy of Sgt.Ozone.
 An OpenXR implicit API layer that injects real-time stereo passthrough from the PSVR2's
 built-in bottom cameras into any OpenXR application running under SteamVR on PC.
 
+<img width="1266" height="636" alt="repository-open-graph-template" src="https://github.com/user-attachments/assets/db3b4f1e-ad0c-4bc6-9feb-77585c79bb57" />
+
 See https://www.youtube.com/watch?v=WyVbhiK8BAc for a demo. 
 
 Intended targets: DCS World, and other D3D11 OpenXR titles. 
