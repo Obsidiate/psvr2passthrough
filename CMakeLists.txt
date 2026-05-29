@@ -26,12 +26,14 @@ find_package(directxtk CONFIG REQUIRED)     # vcpkg: directxtk
 find_package(fmt CONFIG REQUIRED)           # vcpkg: fmt
 find_package(spdlog CONFIG REQUIRED)        # vcpkg: spdlog
 find_package(imgui CONFIG REQUIRED)         # vcpkg: imgui[win32-binding,dx11-binding]
+find_package(onnxruntime CONFIG REQUIRED)   # vcpkg: onnxruntime[directml]
 
 # DirectXMath ships with the Windows SDK - no find_package needed.
 
 # Subprojects ----------------------------------------------------------------
 add_subdirectory(src/config)      # shared config (used by both layer and GUI)
 add_subdirectory(src/core)        # camera ingest, undistortion, shared-memory, input binding
+add_subdirectory(src/handtrack)   # GPU hand detection (BlazePalm + ONNX Runtime)
 add_subdirectory(src/render)      # D3D11 compositor used by the layer
 add_subdirectory(src/layer)       # the actual OpenXR API layer DLL
 add_subdirectory(src/gui)         # standalone configurator executable

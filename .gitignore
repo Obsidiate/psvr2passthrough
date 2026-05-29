@@ -16,7 +16,6 @@ assets/*.tflite
 handoff.md
 
 # Hand-tracking material — kept locally, excluded from V1 release
-src/handtrack/
 src/detection/
 src/tools/
 model/
