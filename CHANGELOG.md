@@ -2,6 +2,32 @@
 
 ### This is not expected to be perfect 1:1 of in headset passthrough at this Alpha stage but it is veeeeery usable. 
 
+## v0.4-alpha
+
+**Dynamic IPD alignment**
+
+The passthrough image now automatically compensates for the lateral offset between the PSVR2's fixed cameras (79mm separation) and your eyes as you adjust the IPD slider. Previously, moving the IPD slider away from the camera midpoint would cause angular misalignment, making the stereo image feel pulled apart. This now corrects in real-time with no session restart required. The correction is calculated at a nominal scene depth of 700mm (roughly arms-reach), which prioritises near-field objects. The config GUI exposes an enable toggle and a camera separation field if your hardware differs.
+
+**Stereo geometry retuned for near-native alignment**
+
+Camera toe-out, tilt, and separation values have been re-derived from the headset's own inter-camera extrinsics data rather than manual estimation. Combined with the IPD correction, passthrough stereo alignment is now close to 1:1 with native PSVR2 passthrough.
+
+**Improved default image appearance**
+
+Brightness increased from 1.3 to 1.6 and contrast from 1.1 to 1.4 for a more natural, vivid image out of the box.
+
+**Camera extrinsics logging**
+
+On first run the layer now logs derived headset geometry (implied toe-out and tilt angles) to `calibration_dump.txt` in `%LOCALAPPDATA%\PSVR2PassthroughLayer\` for diagnostic purposes.
+
+&nbsp;
+
+**Plain English:** Stereo image massively improved - left and right eye alignment is now close to native PSVR2 passthrough. The layer dynamically adjusts as you move the IPD slider on the headset. Assumes virtual panels sit at roughly 700mm (arms-reach distance) for the correction math - works best at that range, still good elsewhere.
+
+&nbsp;
+
+---
+
 ## v0.3.2-alpha
 
 **Experimental reprojection (off by default)**

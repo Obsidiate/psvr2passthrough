@@ -161,10 +161,11 @@ LayerSession::compose_layer(const XrFrameEndInfo* original) {
 
             // Lateral offset: positive = camera is further outward than eye.
             const float offset  = camera_separation_m_ * 0.5f - raw_ipd * 0.5f;
-            // Angular equivalent at a nominal scene depth of 1 m.
-            const float delta   = std::atan2(offset, 1.0f);
-            config_.ipd_toe_delta_l =  delta;
-            config_.ipd_toe_delta_r = -delta;
+            // Angular equivalent at nominal depth 0.7 m (hand-to-shoulder reach) —
+            // prioritises near-field interactions over distant objects.
+            const float delta   = std::atan2(offset, 0.7f);
+            config_.ipd_toe_delta_l = -delta;
+            config_.ipd_toe_delta_r =  delta;
 
             PT_LOG_INFO("IPD correction: ipd={:.1f}mm cam_sep={:.1f}mm "
                         "offset={:.2f}mm delta={:.4f}rad",
@@ -337,6 +338,11 @@ LayerSession::compose_layer(const XrFrameEndInfo* original) {
         // Use the OpenXR eye pose captured at camera-frame-arrive time.
         // ATW corrects for the rotation delta between that snapshot and actual
         // display time. If no snapshot yet, fall back to the current predicted pose.
+        // NOTE: we submit EYE positions (not camera positions) intentionally.
+        // The cameras are 79mm apart; the eyes are at IPD (~62mm). Submitting
+        // camera positions would declare the wider baseline to the compositor,
+        // amplifying the perceived stereo mismatch. The angular correction in the
+        // undistortion mesh handles the directional component for distant objects.
         const XrPosef layer_pose = (has_captured_eye_pose_ && config_.reprojection_enabled)
                                  ? captured_eye_pose_[eye]
                                  : game_proj->views[eye].pose;

@@ -15,9 +15,9 @@ struct Config {
     // Passthrough appearance.
     float global_alpha         = 1.0f;   // transparency [0..1] — 1 = fully opaque
     bool  brightness_enabled   = true;
-    float brightness           = 1.3f;   // luminance multiplier [0.5..4.0]
+    float brightness           = 1.6f;   // luminance multiplier [0.5..4.0]
     bool  contrast_enabled     = true;
-    float contrast             = 1.1f;   // tonal contrast around midpoint [0.5..3.0]
+    float contrast             = 1.4f;   // tonal contrast around midpoint [0.5..3.0]
     bool  enhancements_enabled = true;
     float unsharp_amount       = 0.3f;   // unsharp mask strength [0.0..1.0]
     float unsharp_radius       = 1.5f;   // unsharp mask blur radius in camera pixels [0.5..4.0]
@@ -46,17 +46,17 @@ struct Config {
     // eye/lens position when the user adjusts the headset IPD slider.
     // camera_separation_mm is the physical centre-to-centre distance of the two cameras.
     bool  ipd_correction_enabled = true;
-    float camera_separation_mm   = 80.0f;
+    float camera_separation_mm   = 79.0f;  // measured from extrinsics: 78.9mm
 
     // Camera stereo geometry corrections.
     // When camera_eyes_linked is true the right-eye values are derived from the
     // left-eye values (toe/roll negated, tilt copied) and are not saved separately.
     bool  camera_eyes_linked    = true;
-    float camera_toe_out_rad_l  =  0.32f;
-    float camera_tilt_down_rad_l =  0.48f;
+    float camera_toe_out_rad_l  =  0.3491f;  // 20.0 deg — test value, was 15.1 deg
+    float camera_tilt_down_rad_l =  0.60f;   // 34.6 deg — derived from extrinsics midpoint method
     float camera_roll_rad_l     = -0.1745f;
-    float camera_toe_out_rad_r  = -0.32f;
-    float camera_tilt_down_rad_r =  0.48f;
+    float camera_toe_out_rad_r  = -0.3491f;
+    float camera_tilt_down_rad_r =  0.60f;
     float camera_roll_rad_r     =  0.1745f;
 };
 
