@@ -37,6 +37,11 @@ struct CompositorConfig {
     float camera_toe_out_rad_r   = -0.32f;
     float camera_tilt_down_rad_r =  0.48f;
     float camera_roll_rad_r      =  0.1745f;
+
+    // Runtime IPD correction deltas added on top of the static toe-out values.
+    // Computed each frame by LayerSession from the OpenXR eye poses; not saved to disk.
+    float ipd_toe_delta_l = 0.0f;
+    float ipd_toe_delta_r = 0.0f;
 };
 
 class Compositor {

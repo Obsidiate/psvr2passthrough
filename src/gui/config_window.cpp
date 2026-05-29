@@ -54,7 +54,9 @@ bool configs_equal(const Config& a, const Config& b) {
         && a.camera_roll_rad_l        == b.camera_roll_rad_l
         && a.camera_toe_out_rad_r     == b.camera_toe_out_rad_r
         && a.camera_tilt_down_rad_r   == b.camera_tilt_down_rad_r
-        && a.camera_roll_rad_r        == b.camera_roll_rad_r;
+        && a.camera_roll_rad_r        == b.camera_roll_rad_r
+        && a.ipd_correction_enabled   == b.ipd_correction_enabled
+        && a.camera_separation_mm     == b.camera_separation_mm;
 }
 
 }  // namespace
@@ -416,6 +418,18 @@ void ConfigWindow::draw_main_panel() {
             }
             TextHint("Toe/roll: positive = camera rotates outward. Tilt: positive = camera tilts down.");
         }
+    }
+    ImGui::Spacing();
+
+    // -----------------------------------------------------------------------
+    ImGui::SeparatorText("Dynamic IPD alignment");
+    TextHint("Automatically adjusts the horizontal camera offset when you move the headset IPD slider.");
+    ImGui::Checkbox("Enable IPD correction", &working_.ipd_correction_enabled);
+    if (working_.ipd_correction_enabled) {
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.55f);
+        ImGui::SliderFloat("Camera separation (mm)", &working_.camera_separation_mm,
+                           40.f, 120.f, "%.1f mm");
+        TextHint("Physical centre-to-centre distance between the two cameras. Default: 80 mm.");
     }
     ImGui::Spacing();
 

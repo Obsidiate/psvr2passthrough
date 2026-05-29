@@ -206,6 +206,8 @@ XrResult XRAPI_CALL pt_xrCreateSession(XrInstance instance,
         state->session->set_passthrough_binding(state->config.passthrough_binding);
         state->session->set_toggle_mode(state->config.toggle_mode);
         state->session->set_force_on(state->config.force_passthrough_on);
+        state->session->set_ipd_correction(state->config.ipd_correction_enabled,
+                                           state->config.camera_separation_mm);
         PT_LOG_INFO("D3D11 session adopted by layer");
     } else {
         PT_LOG_WARN("Non-D3D11 graphics binding detected; passthrough layer inert.");
