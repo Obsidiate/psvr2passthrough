@@ -3,11 +3,13 @@
 An OpenXR implicit API layer that injects real-time stereo passthrough from the PSVR2's
 built-in bottom cameras into any OpenXR application running under SteamVR on PC.
 
+<img width="1266" height="636" alt="repository-open-graph-template" src="https://github.com/user-attachments/assets/db3b4f1e-ad0c-4bc6-9feb-77585c79bb57" />
+
 See https://www.youtube.com/watch?v=WyVbhiK8BAc for a demo. 
 
 Intended targets: DCS World, and other D3D11 OpenXR titles. 
 
-**Alpha software — geometry alignment requires manual calibration per headset. See Configuration below.**
+**Alpha software — geometry alignment WIP**
 
 Feedback via [github discussion tab](https://github.com/Obsidiate/psvr2passthrough/discussions) above, or the [offical subreddit /r/psvr2passthrough](https://old.reddit.com/r/psvr2passthrough/)
 
@@ -71,7 +73,9 @@ Output:
 
 ## Install
 
-Install OpenXR layer using powershell, and run 
+unzip release to installation folder and use the install.bat, or 
+
+from a powershell prompt, run 
 ```powershell
 install_layer.ps1   # run as admin
 ```
@@ -124,3 +128,6 @@ layer activates automatically.
 ## Licence
 
 MIT.
+
+<img width="1195" height="896" alt="image" src="https://github.com/user-attachments/assets/ae1248dc-d033-43ba-92ae-750a4f4a26ac" />
+Meme courtesy of Sgt.Ozone.
