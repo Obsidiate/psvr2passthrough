@@ -11,9 +11,6 @@
             "name": "imgui",
             "features": ["win32-binding", "dx11-binding"]
         },
-        {
-            "name": "onnxruntime",
-            "features": ["directml"]
-        }
+        "onnxruntime"
     ]
 }
