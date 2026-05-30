@@ -2,6 +2,26 @@
 
 ### This is not expected to be perfect 1:1 of in headset passthrough at this Alpha stage but it is veeeeery usable. 
 
+## v0.4.1-alpha
+
+**IPD correction reliability fix**
+
+The dynamic IPD alignment introduced in v0.4 had two bugs that have now been resolved.
+
+First, the IPD value was being read from world-space eye positions, which vary continuously with head rotation even when the physical slider has not moved. This caused the correction to fire up to dozens of times per second, triggering constant GPU mesh rebuilds and the perceived framerate degradation reported by some users.
+
+Second, the IPD value could read as negative depending on head orientation, producing a grossly incorrect correction offset (~70mm instead of ~7mm).
+
+Both are fixed by reading the IPD from the runtime's VIEW reference space, which is head-local - the eye X separation in this space equals the true physical IPD regardless of where you are looking. The correction now fires only when the slider is physically moved.
+
+&nbsp;
+
+**Plain English:** The framerate drop in v0.4 is fixed. The IPD correction now works properly - it reads the real slider position and only updates when you actually move it. Confirmed working: tested with a full sweep of the IPD slider during a live session. I'm new to the coding side of VR, still learning the reference frames, bear with me.
+
+&nbsp;
+
+---
+
 ## v0.4-alpha
 
 **Dynamic IPD alignment**

@@ -148,14 +148,33 @@ LayerSession::compose_layer(const XrFrameEndInfo* original) {
     // Dynamic IPD correction: derive per-eye toe-out delta from the current IPD
     // reported by the runtime and the known camera physical separation.
     // The cameras are fixed to the headset body; the lenses/eyes move with the IPD
-    // slider. We use the X-position difference between the game's eye poses as a
-    // proxy for IPD (accurate for a level head; good enough for this correction).
+    // slider. IPD is read by locating views in VIEW space (head-local), where the
+    // eye X separation equals the true IPD independent of head orientation.
     if (ipd_correction_enabled_) {
-        const float raw_ipd =
-            game_proj->views[1].pose.position.x -
-            game_proj->views[0].pose.position.x;   // metres
+        // Locate eyes in VIEW space (head-local) so the X separation equals the true
+        // IPD regardless of head orientation in the world. Using game_proj->space
+        // (stage/local) gives world-space positions whose X difference varies wildly
+        // with head rotation, causing continuous spurious mesh rebuilds.
+        XrViewLocateInfo ipd_vli{ XR_TYPE_VIEW_LOCATE_INFO };
+        ipd_vli.viewConfigurationType = view_config_type_;
+        ipd_vli.displayTime           = original->displayTime;
+        ipd_vli.space                 = passthrough_space_;   // VIEW space = head-local
 
-        // Only rebuild the mesh when IPD has shifted by more than 0.5 mm.
+        XrViewState ipd_vs{ XR_TYPE_VIEW_STATE };
+        std::array<XrView, 2> ipd_views{};
+        ipd_views[0].type = XR_TYPE_VIEW;
+        ipd_views[1].type = XR_TYPE_VIEW;
+        uint32_t ipd_view_count = 0;
+        const XrResult ipd_lr = dispatch_->xrLocateViews(
+            session_, &ipd_vli, &ipd_vs, 2, &ipd_view_count, ipd_views.data());
+
+        constexpr uint32_t kBothValid =
+            XR_VIEW_STATE_POSITION_VALID_BIT | XR_VIEW_STATE_ORIENTATION_VALID_BIT;
+        const float raw_ipd = (XR_SUCCEEDED(ipd_lr) &&
+                               (ipd_vs.viewStateFlags & kBothValid) == kBothValid)
+            ? std::abs(ipd_views[1].pose.position.x - ipd_views[0].pose.position.x)
+            : (last_ipd_m_ > 0.f ? last_ipd_m_ : 0.064f);  // fallback: last known or 64mm
+
         if (std::abs(raw_ipd - last_ipd_m_) > 0.0005f) {
             last_ipd_m_ = raw_ipd;
 
