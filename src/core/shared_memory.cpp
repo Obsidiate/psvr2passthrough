@@ -145,6 +145,8 @@ bool get_distortion_config(SharedMemoryData& data,
     bool found = false;
     for (int i = 0; i < 4; ++i) {
         if (static_cast<int>(configs[i].camId) == cameraId) {
+            PT_LOG_INFO("camera {} calibration: widthPx={} heightPx={} (expect 1016=tight-stride 520192, 1024=padded-stride 524288)",
+                        cameraId, configs[i].widthPx, configs[i].heightPx);
             intrinsics.fx = configs[i].pxMat[0];
             intrinsics.fy = configs[i].pxMat[4];
             intrinsics.cx = configs[i].pxMat[2];
