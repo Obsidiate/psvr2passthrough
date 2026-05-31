@@ -16,7 +16,7 @@ Result: stereoscopy is dramatically improved and passthrough-induced nausea is n
 
 &nbsp;
 
-**Plain English:** Found and fixed the main reason passthrough made your eyes hurt. The right eye image was being read from slightly the wrong place in memory, making it permanently misaligned vertically with the left eye. Your brain was fighting to fuse two images that could never quite line up. Fixed. The difference is immediately noticeable.
+**Plain English:** Found and fixed the main reason passthrough made your eyes hurt. The right eye image was being read from slightly the wrong place in memory, making it permanently misaligned vertically with the left eye. Your brain was fighting to fuse two images that could never quite line up. Fixed. The difference is immediately noticeable. Some lag remains - the image travels over USB rather than being processed inside the headset like native passthrough - but this is a constraint of the USB path, not something introduced by this software. This project is aimed at seated sim use where that lag is not an issue. Work on latency continues.
 
 &nbsp;
 

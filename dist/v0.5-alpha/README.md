@@ -9,7 +9,7 @@ See https://www.youtube.com/watch?v=WyVbhiK8BAc for a demo.
 
 Intended targets: DCS World, and other D3D11 OpenXR titles. 
 
-**Alpha software — geometry alignment WIP**
+**Current version: v0.5-alpha**
 
 Feedback via [github discussion tab](https://github.com/Obsidiate/psvr2passthrough/discussions) above, or the [offical subreddit /r/psvr2passthrough](https://old.reddit.com/r/psvr2passthrough/)
 
@@ -32,12 +32,10 @@ Feedback via [github discussion tab](https://github.com/Obsidiate/psvr2passthrou
 
 ## Known Limitations
 
-- The camera feeds are passed over USB and are a compressed feed at a lower framerate versus the in headset native view, with a resultant drop in quality and potentially higher "VR legs/nausea" effect. Fine for reaching for panels, not for "mixed reality" use.
-- There are mathematical aspects to the undistortion model that may not be exposed to the PC in shared memory that are translated directly in the pipeline from camera > in headset passthrough view. Research continues.
-- A configuration gui has been provided to tweak some values as a result of minor differences between headsets, such as camera rotation.
-- Refinement on theses default values is not completed. Expected iteration of this rapidly in coming weeks.
-- ~30-60 Hz camera feed vs 90/120 Hz game rendering — passthrough will lag fast head motion slightly.
-- D3D11 host-app graphics only.
+- **Motion lag** — the camera feed travels over USB, so there is some latency versus native in-headset passthrough. For seated sim use this is not an issue. This project is not intended for standing mixed-reality gaming where low-latency passthrough is critical.
+- **Residual depth exaggeration** — the PSVR2 cameras are physically wider apart than most users' eye IPD. v0.5 fixes the dominant right-eye misalignment; a smaller depth-scaling residual across the full scene remains and is under active development.
+- **D3D11 host-app graphics only.**
+- A configuration GUI is provided to tweak per-eye geometry for minor headset-to-headset variance.
 
 ## Features
 
