@@ -19,7 +19,7 @@ foreach ($hive in @("HKLM:\Software\Khronos\OpenXR\1\ApiLayers\Implicit",
     $props = Get-ItemProperty -Path $hive -ErrorAction SilentlyContinue
     if (-not $props) { continue }
     foreach ($name in $props.PSObject.Properties.Name) {
-        if ($name -like "*PSVR2PassthroughLayer*") {
+        if ([System.IO.Path]::GetFileName($name) -like "PSVR2PassthroughLayer*") {
             Remove-ItemProperty -Path $hive -Name $name -ErrorAction SilentlyContinue
             Write-Host "Unregistered: $name"
             $removed = $true
