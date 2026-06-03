@@ -1,0 +1,14 @@
+{
+    "file_format_version": "1.0.0",
+    "api_layer": {
+        "name": "XR_APILAYER_NOVENDOR_psvr2_passthrough",
+        "library_path": ".\\PSVR2PassthroughLayer.dll",
+        "api_version": "1.0",
+        "implementation_version": "1",
+        "description": "Selective passthrough for PSVR2 PC adapter using lower stereo cameras.",
+        "functions": {
+            "xrNegotiateLoaderApiLayerInterface": "xrNegotiateLoaderApiLayerInterface"
+        },
+        "disable_environment": "DISABLE_PSVR2_PASSTHROUGH_LAYER"
+    }
+}
