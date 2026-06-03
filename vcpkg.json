@@ -10,6 +10,8 @@
         {
             "name": "imgui",
             "features": ["win32-binding", "dx11-binding"]
-        }
+        },
+        "onnxruntime",
+        "stb"
     ]
 }

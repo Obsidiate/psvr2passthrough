@@ -10,6 +10,7 @@
 #include "camera_source.h"
 #include "compositor.h"
 #include "input_binding.h"
+#include "FrameRecorder.h"
 
 #include <wrl/client.h>
 #include <atomic>
@@ -47,6 +48,7 @@ public:
     void set_view_config_type(XrViewConfigurationType t) { view_config_type_ = t; }
     void set_camera_latency_offset_ns(int64_t ns)        { camera_latency_offset_ns_ = ns; }
     void set_debug_reproj_stats(bool v)                  { debug_reproj_stats_ = v; }
+    void set_recorder_config(const RecorderConfig& cfg)  { recorder_cfg_ = cfg; }
     void set_ipd_correction(bool enabled, float camera_sep_mm) {
         ipd_correction_enabled_ = enabled;
         camera_separation_m_    = camera_sep_mm / 1000.f;
@@ -118,6 +120,17 @@ private:
     std::chrono::steady_clock::time_point reproj_stat_epoch_{};
 
     bool ready_ = false;
+
+    // Frame recording (data collection for bespoke model training).
+    // Disabled by default (max_frames = 0 and output_dir empty means no-op).
+    RecorderConfig recorder_cfg_{};
+    FrameRecorder  recorder_;
+    Pose3f         prev_recorded_pose_{};   // for quaternion-delta angular velocity
+    std::chrono::steady_clock::time_point prev_recorded_time_{};
+
+    // Returns angular velocity magnitude in rad/s from consecutive Pose3f samples.
+    static float pose_angular_velocity_(const Pose3f& prev, const Pose3f& curr,
+                                        float dt_seconds) noexcept;
 };
 
 }  // namespace psvr2pt

@@ -3,9 +3,30 @@
 #include "logging.h"
 
 #include <cmath>
+#include <algorithm>
 
 
 namespace psvr2pt {
+
+// Computes the angular velocity magnitude (rad/s) from the quaternion delta
+// between two consecutive driver poses.  The delta quaternion's half-angle gives
+// the rotation magnitude; dividing by dt converts to rad/s.
+// Returns 0 if dt is too small to be meaningful or either pose is invalid.
+float LayerSession::pose_angular_velocity_(const Pose3f& prev, const Pose3f& curr,
+                                           float dt_seconds) noexcept {
+    if (!prev.valid || !curr.valid || dt_seconds < 1e-6f) return 0.f;
+
+    // delta_q = curr * conjugate(prev)
+    const float ax = -prev.qx, ay = -prev.qy, az = -prev.qz, aw = prev.qw;
+    const float dw = curr.qw*aw - curr.qx*ax - curr.qy*ay - curr.qz*az;
+    const float dx = curr.qw*ax + curr.qx*aw + curr.qy*az - curr.qz*ay;
+    const float dy = curr.qw*ay - curr.qx*az + curr.qy*aw + curr.qz*ax;
+    const float dz = curr.qw*az + curr.qx*ay - curr.qy*ax + curr.qz*aw;
+
+    // Half-angle = acos(|dw|), clamped for numerical safety.
+    const float half_angle = std::acos(std::clamp(std::abs(dw), 0.f, 1.f));
+    return (2.f * half_angle) / dt_seconds;
+}
 
 LayerSession::LayerSession(XrSession xr_session,
                            InstanceDispatch* dispatch,
@@ -19,6 +40,18 @@ LayerSession::LayerSession(XrSession xr_session,
     camera_ = std::make_unique<CameraSource>();
     if (!camera_->start())
         PT_LOG_WARN("LayerSession: camera unavailable; layer will pass through inert.");
+
+    if (!recorder_cfg_.output_dir.empty() && recorder_cfg_.max_frames != 0) {
+        if (camera_->is_running()) {
+            recorder_cfg_.intrinsics[0]    = camera_->intrinsics(CameraId::Left);
+            recorder_cfg_.intrinsics[1]    = camera_->intrinsics(CameraId::Right);
+            recorder_cfg_.params[0]        = camera_->params(CameraId::Left);
+            recorder_cfg_.params[1]        = camera_->params(CameraId::Right);
+            recorder_cfg_.calibration_valid = true;
+        }
+        if (!recorder_.start(recorder_cfg_))
+            PT_LOG_WARN("LayerSession: FrameRecorder failed to start; recording disabled.");
+    }
 
     XrReferenceSpaceCreateInfo rsci{ XR_TYPE_REFERENCE_SPACE_CREATE_INFO };
     rsci.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_VIEW;
@@ -207,6 +240,18 @@ LayerSession::compose_layer(const XrFrameEndInfo* original) {
     // reuse the last valid one rather than dropping passthrough entirely.
     const bool new_camera_frame = camera_->try_get_latest(cached_frame_);
     if (!cached_frame_.valid()) return nullptr;
+
+    if (new_camera_frame && recorder_.running()) {
+        const auto now = cached_frame_.captured_at;
+        const float dt = prev_recorded_time_.time_since_epoch().count() > 0
+            ? std::chrono::duration<float>(now - prev_recorded_time_).count()
+            : 0.f;
+        const float ang_vel = pose_angular_velocity_(
+            prev_recorded_pose_, cached_frame_.captured_pose, dt);
+        recorder_.submitFrame(cached_frame_, ang_vel);
+        prev_recorded_pose_ = cached_frame_.captured_pose;
+        prev_recorded_time_ = now;
+    }
 
     // Determine captured_eye_pose_ for layer submission.
     // When reprojection is enabled, locate views at the camera capture timestamp so

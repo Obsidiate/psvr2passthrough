@@ -41,6 +41,13 @@ struct Config {
     int64_t camera_latency_offset_ns = 16'000'000;  // USB+exposure latency estimate (ns); tune empirically
     bool    debug_reprojection_stats = false;         // log 1Hz aggregated reprojection stats
 
+    // Frame recorder (data collection for bespoke model training).
+    // Recording is disabled when recorder_output_dir is empty or recorder_max_frames is 0.
+    std::string recorder_output_dir    = "";       // absolute path; empty = disabled
+    int         recorder_capture_every = 10;       // save 1-in-N frames
+    float       recorder_max_ang_vel   = 0.8f;     // rad/s motion gate
+    uint32_t    recorder_max_frames    = 0;         // 0 = unlimited (but output_dir must be set)
+
     // Dynamic IPD alignment.
     // Compensates for the lateral offset between each fixed camera and the corresponding
     // eye/lens position when the user adjusts the headset IPD slider.

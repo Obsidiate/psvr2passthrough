@@ -110,7 +110,11 @@ std::string config_to_json(const Config& c) {
     os << "  \"camera_roll_rad_l\":     " << fmt_float(c.camera_roll_rad_l) << ",\n";
     os << "  \"camera_toe_out_rad_r\":  " << fmt_float(c.camera_toe_out_rad_r) << ",\n";
     os << "  \"camera_tilt_down_rad_r\":" << fmt_float(c.camera_tilt_down_rad_r) << ",\n";
-    os << "  \"camera_roll_rad_r\":     " << fmt_float(c.camera_roll_rad_r) << "\n";
+    os << "  \"camera_roll_rad_r\":     " << fmt_float(c.camera_roll_rad_r) << ",\n";
+    os << "  \"recorder_output_dir\":    \"" << c.recorder_output_dir << "\",\n";
+    os << "  \"recorder_capture_every\": " << c.recorder_capture_every << ",\n";
+    os << "  \"recorder_max_ang_vel\":   " << fmt_float(c.recorder_max_ang_vel) << ",\n";
+    os << "  \"recorder_max_frames\":    " << c.recorder_max_frames << "\n";
     os << "}\n";
     return os.str();
 }
@@ -163,6 +167,10 @@ bool config_from_json(const std::string& json, Config& out) {
             else if (k == "camera_roll_rad_r")      out.camera_roll_rad_r         = std::stof(v);
             else if (k == "camera_latency_offset_ns") out.camera_latency_offset_ns = std::stoll(v);
             else if (k == "debug_reprojection_stats") out.debug_reprojection_stats = (v == "true");
+            else if (k == "recorder_output_dir")    out.recorder_output_dir    = v;
+            else if (k == "recorder_capture_every") out.recorder_capture_every = std::stoi(v);
+            else if (k == "recorder_max_ang_vel")   out.recorder_max_ang_vel   = std::stof(v);
+            else if (k == "recorder_max_frames")    out.recorder_max_frames    = static_cast<uint32_t>(std::stoul(v));
             // Legacy single-eye keys — load into left eye; right eye mirrors on next save.
             else if (k == "camera_toe_out_rad")   { out.camera_toe_out_rad_l  =  std::stof(v);
                                                     out.camera_toe_out_rad_r  = -std::stof(v); }

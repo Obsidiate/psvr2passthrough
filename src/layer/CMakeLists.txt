@@ -13,6 +13,7 @@ target_link_libraries(PSVR2PassthroughLayer
         psvr2pt_core
         psvr2pt_config
         psvr2pt_render
+        ml
         OpenXR::headers
         OpenXR::openxr_loader
         d3d11
@@ -38,6 +39,15 @@ set_target_properties(PSVR2PassthroughLayer PROPERTIES
 #   2. We need $<CONFIG> and $<TARGET_FILE:...> generator expressions, which
 #      only get resolved at build time — configure_file() runs too early.
 # -----------------------------------------------------------------------------
+
+# 0. Copy the ONNX Runtime DLL next to the layer DLL so it is found at runtime.
+find_package(onnxruntime CONFIG REQUIRED)
+add_custom_command(TARGET PSVR2PassthroughLayer POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:onnxruntime::onnxruntime>
+        $<TARGET_FILE_DIR:PSVR2PassthroughLayer>
+    COMMENT "Copying onnxruntime DLL alongside layer DLL"
+)
 
 # 1. Generate the OpenXR API layer manifest next to the DLL, with the absolute
 #    DLL path baked into the library_path field.

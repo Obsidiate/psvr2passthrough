@@ -33,6 +33,7 @@ find_package(imgui CONFIG REQUIRED)         # vcpkg: imgui[win32-binding,dx11-bi
 add_subdirectory(src/config)      # shared config (used by both layer and GUI)
 add_subdirectory(src/core)        # camera ingest, undistortion, shared-memory, input binding
 add_subdirectory(src/render)      # D3D11 compositor used by the layer
+add_subdirectory(src/ml)          # ONNX inference, FrameRecorder, BespokeDetector
 add_subdirectory(src/layer)       # the actual OpenXR API layer DLL
 add_subdirectory(src/gui)         # standalone configurator executable
 

@@ -1,0 +1,11 @@
+<View>
+  <Header value="PSVR2 Wrist Keypoint Labelling"/>
+  <Text name="instructions" value="Mark the centre of each visible wrist joint. If a wrist is fully occluded or outside the frame, leave that keypoint unmarked. Work on LEFT eye frames (_L.png) first; RIGHT eye frames (_R.png) are separate tasks."/>
+
+  <Image name="image" value="$image" zoom="true" zoomControl="true" rotateControl="false"/>
+
+  <KeyPointLabels name="keypoints" toName="image" opacity="0.8" strokeWidth="2">
+    <Label value="LeftWrist"  background="#00BFFF" hotkey="l"/>
+    <Label value="RightWrist" background="#FF6347" hotkey="r"/>
+  </KeyPointLabels>
+</View>

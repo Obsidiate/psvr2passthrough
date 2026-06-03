@@ -1,6 +1,7 @@
 #include "layer_dispatch.h"
 #include "layer_session.h"
 #include "logging.h"
+#include "FrameRecorder.h"
 
 #include <chrono>
 #include <cstring>
@@ -208,6 +209,14 @@ XrResult XRAPI_CALL pt_xrCreateSession(XrInstance instance,
         state->session->set_force_on(state->config.force_passthrough_on);
         state->session->set_ipd_correction(state->config.ipd_correction_enabled,
                                            state->config.camera_separation_mm);
+        if (!state->config.recorder_output_dir.empty()) {
+            RecorderConfig rc;
+            rc.output_dir        = state->config.recorder_output_dir;
+            rc.capture_every_n   = state->config.recorder_capture_every;
+            rc.max_angular_velocity = state->config.recorder_max_ang_vel;
+            rc.max_frames        = state->config.recorder_max_frames;
+            state->session->set_recorder_config(rc);
+        }
         PT_LOG_INFO("D3D11 session adopted by layer");
     } else {
         PT_LOG_WARN("Non-D3D11 graphics binding detected; passthrough layer inert.");
