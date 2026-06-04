@@ -1,0 +1,198 @@
+# Changelog
+
+### This is not expected to be perfect 1:1 of in headset passthrough at this Alpha stage but it is veeeeery usable. 
+
+## v0.5.2-alpha
+
+Default transparency changed from 1.0 (fully opaque) to 0.9 (partly transparent/mixed reality) after user feedback - people prefer a slightly mixed state as default. Existing users are unaffected; this only applies on first install with no prior config. This would be the same as adjusting the transparency slider to 0.9 manually. There is no need for 0.5.1 users to upgrade to 0.5.2.
+
+---
+
+## v0.5.1-alpha
+
+**Installer cleanup - multiple layer registration fix**
+
+Users who installed previous versions and then upgraded by extracting to a new folder could end up with multiple stale layer registrations in the Windows registry. OpenXR loads all registered layers simultaneously, so this caused duplicate passthrough injection and potential conflicts.
+
+The install and uninstall scripts now scan the entire OpenXR registry key for any entry matching `PSVR2PassthroughLayer` - regardless of path or version - and remove all of them before registering the new version. The uninstall script is now fully directory-agnostic and will clean up any version from any install location.
+
+The layer manifest JSON is now versioned (`PSVR2PassthroughLayer-051a.json`) so future installs are unambiguously identifiable in the registry.
+
+&nbsp;
+
+**Plain English:** If you've upgraded from a previous version by extracting to a new folder, you may have had multiple copies of the layer loaded simultaneously without knowing it. The installer now cleans up all previous registrations automatically. The uninstall script will also find and remove any version, no matter where it was installed from.
+
+&nbsp;
+
+---
+
+## v0.5-alpha
+
+**Right-eye vertical disparity fix - major stereoscopy improvement**
+
+Diagnosed and fixed a bug that has been present since the first release: the right-eye camera frame was being read from the wrong position in the driver's shared memory buffer.
+
+The PSVR2 driver packs each camera frame at 1016 pixels tall (not 1024 as assumed). Our code used a stride of 524,288 bytes per eye (1024x1024 BC4), but the correct stride is 520,192 bytes (1024x1016 BC4). The 4,096-byte error shifted the right eye image 8 pixel rows out of alignment, producing a permanent ~1.2 degree vertical disparity between the left and right eyes. This was not cancellable by any calibration adjustment and was a constant source of vergence strain.
+
+The fix is a single constant change confirmed by reading `heightPx` directly from the driver's own camera calibration data.
+
+Result: stereoscopy is dramatically improved and passthrough-induced nausea is nearly eliminated. This was the dominant contributor to eye strain in all previous versions.
+
+&nbsp;
+
+**Plain English:** Found and fixed the main reason passthrough made your eyes hurt. The right eye image was being read from slightly the wrong place in memory, making it permanently misaligned vertically with the left eye. Your brain was fighting to fuse two images that could never quite line up. Fixed. The difference is immediately noticeable. Some lag remains - the image travels over USB rather than being processed inside the headset like native passthrough - but this is a constraint of the USB path, not something introduced by this software. This project is aimed at seated sim use where that lag is not an issue. Work on latency continues.
+
+&nbsp;
+
+**Work in progress (active branches)**
+
+- Hand tracking - two experimental approaches under development
+- Depth-aware reprojection - groundwork for true per-pixel stereo correction at all depths
+- Latency reduction - ongoing investigation into frame timing improvements
+
+&nbsp;
+
+---
+
+## v0.4.1-alpha
+
+**IPD correction reliability fix**
+
+The dynamic IPD alignment introduced in v0.4 had two bugs that have now been resolved.
+
+First, the IPD value was being read from world-space eye positions, which vary continuously with head rotation even when the physical slider has not moved. This caused the correction to fire up to dozens of times per second, triggering constant GPU mesh rebuilds and the perceived framerate degradation reported by some users.
+
+Second, the IPD value could read as negative depending on head orientation, producing a grossly incorrect correction offset (~70mm instead of ~7mm).
+
+Both are fixed by reading the IPD from the runtime's VIEW reference space, which is head-local - the eye X separation in this space equals the true physical IPD regardless of where you are looking. The correction now fires only when the slider is physically moved.
+
+&nbsp;
+
+**Plain English:** The framerate drop in v0.4 is fixed. The IPD correction now works properly - it reads the real slider position and only updates when you actually move it. Confirmed working: tested with a full sweep of the IPD slider during a live session. I'm new to the coding side of VR, still learning the reference frames, bear with me.
+
+&nbsp;
+
+---
+
+## v0.4-alpha
+
+**Dynamic IPD alignment**
+
+The passthrough image now automatically compensates for the lateral offset between the PSVR2's fixed cameras (79mm separation) and your eyes as you adjust the IPD slider. Previously, moving the IPD slider away from the camera midpoint would cause angular misalignment, making the stereo image feel pulled apart. This now corrects in real-time with no session restart required. The correction is calculated at a nominal scene depth of 700mm (roughly arms-reach), which prioritises near-field objects. The config GUI exposes an enable toggle and a camera separation field if your hardware differs.
+
+**Stereo geometry retuned for near-native alignment**
+
+Camera toe-out, tilt, and separation values have been re-derived from the headset's own inter-camera extrinsics data rather than manual estimation. Combined with the IPD correction, passthrough stereo alignment is now close to 1:1 with native PSVR2 passthrough.
+
+**Improved default image appearance**
+
+Brightness increased from 1.3 to 1.6 and contrast from 1.1 to 1.4 for a more natural, vivid image out of the box.
+
+**Camera extrinsics logging**
+
+On first run the layer now logs derived headset geometry (implied toe-out and tilt angles) to `calibration_dump.txt` in `%LOCALAPPDATA%\PSVR2PassthroughLayer\` for diagnostic purposes.
+
+&nbsp;
+
+**Plain English:** Stereo image massively improved - left and right eye alignment is now close to native PSVR2 passthrough. The layer dynamically adjusts as you move the IPD slider on the headset. Assumes virtual panels sit at roughly 700mm (arms-reach distance) for the correction math - works best at that range, still good elsewhere.
+
+**Note:** Some users may notice a slight drop in apparent framerate compared to v0.3.2-alpha. This is being investigated. If you prefer the higher framerate over the improved stereo alignment, v0.3.2-alpha remains available on the releases page.
+
+&nbsp;
+
+---
+
+## v0.3.2-alpha
+
+**Experimental reprojection (off by default)**
+
+Very early, placeholder work toward reducing the motion lag visible in the passthrough image. The layer now intercepts `xrBeginSession` and `xrWaitFrame` to establish a clock calibration offset between steady_clock and SteamVR's XrTime domain, extracts the SLAM-corrected head pose from the driver shared memory at each camera frame, and calls `xrLocateViews` with a historically-measured capture timestamp so the compositor's ATW can warp the passthrough image from actual capture time to scanout time rather than from the game's predicted display time.
+
+In testing, this does not yet eliminate the most visible motion artefact. The shimmering double-edge effect on fast head pivots (symmetric ghost on both the leading and trailing edge of objects) is a consequence of the 60fps camera running on a 120Hz display - each camera frame must be used for two consecutive display frames, which ATW renders at slightly different orientations. The likely fix is frame interpolation between consecutive camera frames, but this carries a potentially prohibitive per-frame GPU cost and has not yet been attempted.
+
+Reprojection is disabled by default. It can be enabled in the configuration GUI under the new Reprojection section, or by setting `"reprojection_enabled": true` in `config.json`. Treat as a preview only.
+
+&nbsp;
+
+**Plain English:** Super early attempt at making the camera image track your head movement better. It mostly doesn't work yet - there is a known shimmering/ghosting effect on fast movement that we have not solved. Off by default. You can turn it on to see what it does, but do not expect much.
+
+&nbsp;
+
+**Shared memory CPU usage fix**
+
+The PSVR2 driver image event is a manual-reset event that remains permanently signaled once the first camera frame has arrived. Without tracking which frame was last copied, the camera thread would sometimes spin re-reading the same stale frame at tens of thousands of iterations per second, causing noticeable single-thread CPU spikes. A per-slot timestamp comparison now prevents redundant copies.
+
+**GUI: update checker**
+
+The configuration tool now checks for new releases at startup and shows a status banner - amber if a newer version is available with a link to the releases page, green if you are up to date. No data beyond a single HTTPS request to the GitHub releases API is sent.
+
+**GUI: version and feedback links**
+
+The About panel now shows the current version string, with direct links to GitHub Discussions and the community subreddit.
+
+---
+
+## v0.3.1-alpha
+
+**BC4 decompression moved to GPU**
+Camera frames are now uploaded as raw `DXGI_FORMAT_BC4_UNORM` block-compressed data and decompressed entirely by the GPU hardware during texture sampling. The previous per-frame software decode loop (524,288 bytes per eye, every frame) has been removed. This reduces CPU load on the camera thread, eliminates any timing coupling between camera frame delivery and decompression, and has produced a noticeable improvement in perceived latency. As a rough estimate, this change reduces overall CPU usage by around 2-5%, and cuts the memory bandwidth consumed by frame processing by more than half - a modest but real benefit on CPU-bound sim rigs.
+
+&nbsp;
+
+**Plain English:** Moved some brain things from CPU to GPU. Picture comes through faster. Less vom vom.
+
+&nbsp;
+
+Thanks to the community at the **PSVR2Toolkit Discord** for the nudge in this direction - a contributor who preferred not to be named specifically raised the idea. Much appreciated. And another shoutout to the **psvr2camera** project for making all of this possible.
+
+---
+
+## v0.3-alpha
+
+**Massive visual quality improvement**
+Contrast control, unsharp masking, and a gamma pipeline correction combine to produce a significantly sharper, more natural-looking passthrough image — closer to the native PSVR2 passthrough experience than any previous release.
+
+**Image quality controls**
+Three new per-pixel adjustments are now applied in the shader pipeline: a **contrast** multiplier that lifts the tonal range to compensate for the PSVR2 driver's auto-exposure flattening, and an **unsharp mask** (strength + radius) that recovers edge detail lost to BC4 compression. Both are individually toggleable — contrast has its own enable checkbox; unsharp masking has a section-level toggle. Neutral values are used when disabled so the pipeline remains a single shader pass.
+
+**Improved configuration GUI**
+The left and right panels are now independently scrollable. All hint text wraps to the available column width. Ctrl+Click on any slider allows typing an exact value (noted in the Tips panel). Specific sim names removed from the UI. A stereo geometry calibration notice prompts community feedback on default values.
+
+**Gamma pipeline correction**
+The compositor eye-target texture is now correctly `R8G8B8A8_UNORM` (no sRGB encoding on write). CopyResource transfers raw bits to the `UNORM_SRGB` swapchain, letting SteamVR interpret the camera's native gamma-encoded values correctly. Previously this pipeline was inverted, causing a washed-out, low-contrast image.
+
+**BC4 decompression accuracy**
+Round-to-nearest correction applied to the software BC4 decoder (`+3` before `/7` and `+2` before `/5` per spec). Eliminates a subtle systematic bias in decompressed pixel values.
+
+**Zero-copy camera frame handoff**
+The camera producer thread now swaps buffers with the render thread rather than copying, eliminating a per-frame 2MB allocation. A consumed-frame flag prevents re-rendering stale frames when the game renders faster than the camera.
+
+**Codebase cleanup**
+Removed dead detection, hand-tracking, and tools code that was no longer referenced. Stale CMakeLists post-build steps, dead API surface, and orphaned static locals replaced with member variables for correct behaviour on session recreation.
+
+---
+
+## v0.2-alpha
+
+**Per-eye geometry calibration**
+Toe-out, tilt and roll are now configured independently per eye. Default mode pairs them
+symmetrically (adjusting one mirrors the other), with an "Unlock eyes" button for independent
+left/right tuning. This allows finer correction for potential physical variance between
+individual headsets. Methods to automate this calibration are being explored for a future release.
+
+**Geometry controls in degrees**
+The toe-out, tilt and roll sliders now display and accept values in degrees rather than radians.
+
+**Headset intrinsics panel**
+The configuration GUI right column shows the active fx, fy, cx, cy values read from the PSVR2
+driver at the last session start, confirming that per-headset factory calibration is in use.
+
+**Calibration dump**
+Each session writes `%LOCALAPPDATA%\PSVR2PassthroughLayer\calibration_dump.txt` containing
+the full factory intrinsics and 20-coefficient distortion polynomial for both eyes.
+
+---
+
+## v0.1-alpha
+
+Initial release.

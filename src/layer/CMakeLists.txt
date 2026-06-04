@@ -45,7 +45,7 @@ add_custom_command(
     TARGET PSVR2PassthroughLayer POST_BUILD
     COMMAND ${CMAKE_COMMAND}
         -DSOURCE=${CMAKE_SOURCE_DIR}/cmake/PSVR2PassthroughLayer.json.in
-        -DDEST=$<TARGET_FILE_DIR:PSVR2PassthroughLayer>/PSVR2PassthroughLayer-051a.json
+        -DDEST=$<TARGET_FILE_DIR:PSVR2PassthroughLayer>/PSVR2PassthroughLayer-052a.json
         -DLIBRARY_PATH=$<TARGET_FILE:PSVR2PassthroughLayer>
         -P ${CMAKE_SOURCE_DIR}/cmake/GenerateManifest.cmake
     COMMENT "Generating OpenXR API layer manifest"

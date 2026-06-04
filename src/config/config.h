@@ -13,7 +13,7 @@ struct Config {
     bool  enabled              = true;
 
     // Passthrough appearance.
-    float global_alpha         = 1.0f;   // transparency [0..1] — 1 = fully opaque
+    float global_alpha         = 0.9f;   // transparency [0..1] — 1 = fully opaque
     bool  brightness_enabled   = true;
     float brightness           = 1.6f;   // luminance multiplier [0.5..4.0]
     bool  contrast_enabled     = true;
