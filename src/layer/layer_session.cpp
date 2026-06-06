@@ -7,13 +7,9 @@
 
 namespace psvr2pt {
 
-LayerSession::LayerSession(XrSession xr_session,
-                           InstanceDispatch* dispatch,
-                           ID3D11Device* device)
-    : session_(xr_session)
-    , dispatch_(dispatch)
-    , device_(device)
-{
+// Common construction shared by both graphics modes. device_/ctx_ and the
+// graphics-mode members must already be set by the delegating constructor.
+void LayerSession::common_init_() {
     device_->GetImmediateContext(&ctx_);
 
     camera_ = std::make_unique<CameraSource>();
@@ -34,10 +30,50 @@ LayerSession::LayerSession(XrSession xr_session,
     compositor_ = std::make_unique<Compositor>();
 
     ready_ = (passthrough_space_ != XR_NULL_HANDLE);
-    PT_LOG_INFO("LayerSession constructed (ready={})", ready_);
+    PT_LOG_INFO("LayerSession constructed (ready={} mode={})", ready_,
+                mode_ == GraphicsMode::D3D11On12 ? "D3D11On12" : "D3D11Native");
+}
+
+LayerSession::LayerSession(XrSession xr_session,
+                           InstanceDispatch* dispatch,
+                           ID3D11Device* device)
+    : session_(xr_session)
+    , dispatch_(dispatch)
+    , mode_(GraphicsMode::D3D11Native)
+    , device_(device)
+{
+    common_init_();
+}
+
+LayerSession::LayerSession(XrSession xr_session,
+                           InstanceDispatch* dispatch,
+                           ID3D11Device* interop_device,
+                           ID3D11On12Device* on12,
+                           ID3D12Device* game_device,
+                           ID3D12CommandQueue* game_queue)
+    : session_(xr_session)
+    , dispatch_(dispatch)
+    , mode_(GraphicsMode::D3D11On12)
+    , device_(interop_device)
+    , on12_(on12)
+    , game_d3d12_device_(game_device)
+    , game_d3d12_queue_(game_queue)
+{
+    common_init_();
 }
 
 LayerSession::~LayerSession() {
+    // Teardown order matters in D3D11On12 mode: the wrapped D3D11 textures
+    // reference both the runtime's D3D12 swapchain images and the 11on12 device,
+    // so they must be released BEFORE xrDestroySwapchain (which frees the D3D12
+    // images) and before the 11on12 device. This dtor body runs before member
+    // ComPtr destruction, so we must clear the wrapped vectors explicitly here.
+    if (mode_ == GraphicsMode::D3D11On12 && ctx_)
+        ctx_->Flush();  // drain any in-flight interop work before releasing
+
+    for (auto& sc : swapchains_)
+        sc.wrapped.clear();
+
     if (dispatch_) {
         for (auto& sc : swapchains_) {
             if (sc.handle != XR_NULL_HANDLE && dispatch_->xrDestroySwapchain)
@@ -46,6 +82,50 @@ LayerSession::~LayerSession() {
         if (passthrough_space_ != XR_NULL_HANDLE && dispatch_->xrDestroySpace)
             dispatch_->xrDestroySpace(passthrough_space_);
     }
+    // Remaining ComPtr members release in reverse-declaration order: compositor_
+    // (its D3D11 objects on the interop device) is a unique_ptr destroyed after
+    // this body; on12_/device_/ctx_ release after that. The app-owned
+    // game_d3d12_* ComPtrs only decrement — we never explicitly Release them.
+}
+
+bool LayerSession::negotiate_swapchain_format_() {
+    // Pick an R8G8B8A8-family format the runtime offers, so the compositor's
+    // R8G8B8A8_UNORM output stays CopyResource-compatible (CopyResource requires
+    // the same typeless family; a BGRA/other-family target would fail the copy).
+    // Prefer the sRGB variant (matches the historical D3D11 path), then UNORM.
+    if (!dispatch_->xrEnumerateSwapchainFormats) {
+        PT_LOG_ERROR("xrEnumerateSwapchainFormats unavailable; cannot negotiate D3D12 format");
+        return false;
+    }
+    uint32_t count = 0;
+    if (XR_FAILED(dispatch_->xrEnumerateSwapchainFormats(session_, 0, &count, nullptr)) ||
+        count == 0) {
+        PT_LOG_ERROR("xrEnumerateSwapchainFormats returned no formats");
+        return false;
+    }
+    std::vector<int64_t> formats(count);
+    if (XR_FAILED(dispatch_->xrEnumerateSwapchainFormats(
+            session_, count, &count, formats.data()))) {
+        PT_LOG_ERROR("xrEnumerateSwapchainFormats(fill) failed");
+        return false;
+    }
+
+    auto offered = [&](int64_t f) {
+        for (int64_t v : formats) if (v == f) return true;
+        return false;
+    };
+    if (offered(DXGI_FORMAT_R8G8B8A8_UNORM_SRGB)) {
+        swapchain_format_ = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    } else if (offered(DXGI_FORMAT_R8G8B8A8_UNORM)) {
+        swapchain_format_ = DXGI_FORMAT_R8G8B8A8_UNORM;
+    } else {
+        PT_LOG_ERROR("No R8G8B8A8-family swapchain format offered by runtime; "
+                     "D3D12 passthrough inert (CopyResource needs matching family)");
+        return false;
+    }
+    PT_LOG_INFO("D3D12 swapchain format negotiated: {} ({} formats offered)",
+                static_cast<int>(swapchain_format_), count);
+    return true;
 }
 
 bool LayerSession::ensure_swapchain_(uint32_t width, uint32_t height) {
@@ -54,16 +134,26 @@ bool LayerSession::ensure_swapchain_(uint32_t width, uint32_t height) {
         return true;
     if (!dispatch_->xrCreateSwapchain || !dispatch_->xrEnumerateSwapchainImages) return false;
 
+    const bool on12 = (mode_ == GraphicsMode::D3D11On12);
+
+    // D3D11 native keeps its historical hard-coded sRGB format; D3D12 negotiates.
+    if (on12) {
+        if (!negotiate_swapchain_format_()) return false;
+    } else {
+        swapchain_format_ = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    }
+
     for (int eye = 0; eye < 2; ++eye) {
         if (swapchains_[eye].handle != XR_NULL_HANDLE && dispatch_->xrDestroySwapchain) {
             dispatch_->xrDestroySwapchain(swapchains_[eye].handle);
             swapchains_[eye].handle = XR_NULL_HANDLE;
         }
+        swapchains_[eye].wrapped.clear();  // drop stale wrapped views before re-create
 
         XrSwapchainCreateInfo sci{ XR_TYPE_SWAPCHAIN_CREATE_INFO };
         sci.usageFlags  = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT
                         | XR_SWAPCHAIN_USAGE_SAMPLED_BIT;
-        sci.format      = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        sci.format      = static_cast<int64_t>(swapchain_format_);
         sci.sampleCount = 1;
         sci.width       = width;
         sci.height      = height;
@@ -78,10 +168,39 @@ bool LayerSession::ensure_swapchain_(uint32_t width, uint32_t height) {
 
         uint32_t count = 0;
         dispatch_->xrEnumerateSwapchainImages(swapchains_[eye].handle, 0, &count, nullptr);
-        swapchains_[eye].images.assign(count, { XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR });
-        dispatch_->xrEnumerateSwapchainImages(
-            swapchains_[eye].handle, count, &count,
-            reinterpret_cast<XrSwapchainImageBaseHeader*>(swapchains_[eye].images.data()));
+
+        if (on12) {
+            swapchains_[eye].images12.assign(count, { XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR });
+            dispatch_->xrEnumerateSwapchainImages(
+                swapchains_[eye].handle, count, &count,
+                reinterpret_cast<XrSwapchainImageBaseHeader*>(swapchains_[eye].images12.data()));
+
+            // Wrap each D3D12 swapchain image as a D3D11 texture once and cache it.
+            // InState COPY_DEST: we only ever CopyResource into it. OutState COMMON:
+            // the state the runtime expects when it reads the released image as a
+            // composition source.
+            swapchains_[eye].wrapped.assign(count, nullptr);
+            D3D11_RESOURCE_FLAGS rf{};
+            rf.BindFlags = D3D11_BIND_RENDER_TARGET;
+            for (uint32_t i = 0; i < count; ++i) {
+                HRESULT hr = on12_->CreateWrappedResource(
+                    swapchains_[eye].images12[i].texture,
+                    &rf,
+                    D3D12_RESOURCE_STATE_COPY_DEST,
+                    D3D12_RESOURCE_STATE_COMMON,
+                    IID_PPV_ARGS(&swapchains_[eye].wrapped[i]));
+                if (FAILED(hr)) {
+                    PT_LOG_ERROR("CreateWrappedResource failed eye={} img={} hr=0x{:08X}",
+                                 eye, i, static_cast<uint32_t>(hr));
+                    return false;
+                }
+            }
+        } else {
+            swapchains_[eye].images.assign(count, { XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR });
+            dispatch_->xrEnumerateSwapchainImages(
+                swapchains_[eye].handle, count, &count,
+                reinterpret_cast<XrSwapchainImageBaseHeader*>(swapchains_[eye].images.data()));
+        }
         swapchains_[eye].width  = width;
         swapchains_[eye].height = height;
     }
@@ -318,30 +437,72 @@ LayerSession::compose_layer(const XrFrameEndInfo* original) {
     compositor_->upload_frame(cached_frame_);
     compositor_->render(config_);
 
-    for (uint32_t eye = 0; eye < 2; ++eye) {
-        uint32_t idx = 0;
-        XrSwapchainImageAcquireInfo ai{ XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO };
-        if (XR_FAILED(dispatch_->xrAcquireSwapchainImage(swapchains_[eye].handle, &ai, &idx))) {
-            PT_LOG_WARN("xrAcquireSwapchainImage failed eye={}", eye);
-            return nullptr;
+    // --- Copy composited eyes into the swapchain images ---
+    // Both eyes are separate swapchains, so both can be acquired at once. In
+    // D3D11On12 mode this lets us copy both, release both wrapped resources, and
+    // Flush ONCE before any xrReleaseSwapchainImage — the runtime requires an
+    // image's GPU writes to be submitted before it is released, so a single
+    // flush after both copies is both correct and minimal. The D3D11 native path
+    // keeps its original per-eye acquire/copy/release (unchanged behaviour).
+    if (mode_ == GraphicsMode::D3D11On12) {
+        std::array<ID3D11Resource*, 2> wrapped_to_copy{};
+        for (uint32_t eye = 0; eye < 2; ++eye) {
+            XrSwapchainImageAcquireInfo ai{ XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO };
+            if (XR_FAILED(dispatch_->xrAcquireSwapchainImage(swapchains_[eye].handle, &ai, &eye_image_idx_[eye]))) {
+                PT_LOG_WARN("xrAcquireSwapchainImage failed eye={}", eye);
+                return nullptr;
+            }
+            XrSwapchainImageWaitInfo wi{ XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
+            wi.timeout = 100'000'000LL;
+            XrResult wr = dispatch_->xrWaitSwapchainImage(swapchains_[eye].handle, &wi);
+            if (wr != XR_SUCCESS) {
+                PT_LOG_WARN("xrWaitSwapchainImage eye={} result={}", eye, static_cast<int>(wr));
+                XrSwapchainImageReleaseInfo ri{ XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO };
+                dispatch_->xrReleaseSwapchainImage(swapchains_[eye].handle, &ri);
+                return nullptr;
+            }
+            wrapped_to_copy[eye] = swapchains_[eye].wrapped[eye_image_idx_[eye]].Get();
         }
 
-        XrSwapchainImageWaitInfo wi{ XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
-        wi.timeout = 100'000'000LL;
-        XrResult wr = dispatch_->xrWaitSwapchainImage(swapchains_[eye].handle, &wi);
-        if (wr != XR_SUCCESS) {
-            PT_LOG_WARN("xrWaitSwapchainImage eye={} result={}", eye, static_cast<int>(wr));
+        on12_->AcquireWrappedResources(wrapped_to_copy.data(), 2);
+        for (uint32_t eye = 0; eye < 2; ++eye)
+            ctx_->CopyResource(wrapped_to_copy[eye], compositor_->eye(eye).texture.Get());
+        on12_->ReleaseWrappedResources(wrapped_to_copy.data(), 2);
+        ctx_->Flush();  // submit copies to the game's queue BEFORE releasing images
+
+        for (uint32_t eye = 0; eye < 2; ++eye) {
             XrSwapchainImageReleaseInfo ri{ XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO };
             dispatch_->xrReleaseSwapchainImage(swapchains_[eye].handle, &ri);
-            return nullptr;
         }
+    } else {
+        for (uint32_t eye = 0; eye < 2; ++eye) {
+            uint32_t idx = 0;
+            XrSwapchainImageAcquireInfo ai{ XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO };
+            if (XR_FAILED(dispatch_->xrAcquireSwapchainImage(swapchains_[eye].handle, &ai, &idx))) {
+                PT_LOG_WARN("xrAcquireSwapchainImage failed eye={}", eye);
+                return nullptr;
+            }
 
-        ID3D11Texture2D* dst = swapchains_[eye].images[idx].texture;
-        ctx_->CopyResource(dst, compositor_->eye(eye).texture.Get());
+            XrSwapchainImageWaitInfo wi{ XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
+            wi.timeout = 100'000'000LL;
+            XrResult wr = dispatch_->xrWaitSwapchainImage(swapchains_[eye].handle, &wi);
+            if (wr != XR_SUCCESS) {
+                PT_LOG_WARN("xrWaitSwapchainImage eye={} result={}", eye, static_cast<int>(wr));
+                XrSwapchainImageReleaseInfo ri{ XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO };
+                dispatch_->xrReleaseSwapchainImage(swapchains_[eye].handle, &ri);
+                return nullptr;
+            }
 
-        XrSwapchainImageReleaseInfo ri{ XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO };
-        dispatch_->xrReleaseSwapchainImage(swapchains_[eye].handle, &ri);
+            ID3D11Texture2D* dst = swapchains_[eye].images[idx].texture;
+            ctx_->CopyResource(dst, compositor_->eye(eye).texture.Get());
 
+            XrSwapchainImageReleaseInfo ri{ XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO };
+            dispatch_->xrReleaseSwapchainImage(swapchains_[eye].handle, &ri);
+        }
+    }
+
+    // --- Build the projection views (pose + FOV) for both eyes ---
+    for (uint32_t eye = 0; eye < 2; ++eye) {
         const CameraId cam_id = (eye == 0) ? CameraId::Left : CameraId::Right;
         const CameraIntrinsics& intr = camera_->intrinsics(cam_id);
         const float zoom = config_.zoom_factor;

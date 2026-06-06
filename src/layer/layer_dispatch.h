@@ -1,9 +1,17 @@
 #pragma once
 
+#ifndef XR_USE_GRAPHICS_API_D3D11
 #define XR_USE_GRAPHICS_API_D3D11
+#endif
+#ifndef XR_USE_GRAPHICS_API_D3D12
+#define XR_USE_GRAPHICS_API_D3D12
+#endif
+#ifndef XR_USE_PLATFORM_WIN32
 #define XR_USE_PLATFORM_WIN32
+#endif
 
 #include <d3d11.h>
+#include <d3d12.h>
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 #include <openxr/openxr_loader_negotiation.h>
@@ -41,6 +49,7 @@ struct InstanceDispatch {
     // Swapchains (we need to create our own for the passthrough overlay).
     PFN_xrCreateSwapchain         xrCreateSwapchain         = nullptr;
     PFN_xrDestroySwapchain        xrDestroySwapchain        = nullptr;
+    PFN_xrEnumerateSwapchainFormats xrEnumerateSwapchainFormats = nullptr;
     PFN_xrEnumerateSwapchainImages xrEnumerateSwapchainImages = nullptr;
     PFN_xrAcquireSwapchainImage   xrAcquireSwapchainImage   = nullptr;
     PFN_xrWaitSwapchainImage      xrWaitSwapchainImage      = nullptr;
