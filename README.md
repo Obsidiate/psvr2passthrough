@@ -27,9 +27,12 @@ One install, set and forget. No need to run a program every time. Installed laye
 Feedback via [github discussion tab](https://github.com/Obsidiate/psvr2passthrough/discussions) above, or the [offical subreddit /r/psvr2passthrough](https://old.reddit.com/r/psvr2passthrough/)
 
 ## All PSVR2 users should also check out 
- [PSVR2toolkit](https://github.com/BnuuySolutions/PSVR2Toolkit) for enabling eye tracking
- [QuadViews](https://github.com/mbucchia/Quad-Views-Foveated) to enable it in DCS
- and [Quadviews Companion](https://github.com/TallyMouse/QuadViewsCompanion) to tweak the foveated rendering values. Amazing projects. 
+ [PSVR2toolkit](https://github.com/BnuuySolutions/PSVR2Toolkit) for enabling eye tracking   
+
+ [QuadViews](https://github.com/mbucchia/Quad-Views-Foveated) to enable it in DCS  
+ 
+ and [Quadviews Companion](https://github.com/TallyMouse/QuadViewsCompanion) to tweak the foveated rendering values. Amazing projects.  
+ 
 
 ## What it does - More detail.
 
