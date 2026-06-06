@@ -5,7 +5,8 @@ An OpenXR implicit API layer that injects real-time stereo passthrough from the 
 <img width="1266" height="636" alt="repository-open-graph-template" src="https://github.com/user-attachments/assets/db3b4f1e-ad0c-4bc6-9feb-77585c79bb57" />
 
 ## Wait...What? What does this do?
-The image above shows it : Blend the real world with your game using the headsets cameras. 
+The image above shows it : Blend the real world with your game using the headsets cameras.  
+
 Watch https://www.youtube.com/watch?v=WyVbhiK8BAc for a live demo. 
 
 ## Features
