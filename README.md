@@ -1,22 +1,38 @@
 # PSVR2 Passthrough Layer
 
-An OpenXR implicit API layer that injects real-time stereo passthrough from the PSVR2's
-built-in bottom cameras into any OpenXR application running under SteamVR on PC.
+An OpenXR implicit API layer that injects real-time stereo passthrough from the PSVR2's built-in bottom cameras into any OpenXR application running under SteamVR on PC.
 
 <img width="1266" height="636" alt="repository-open-graph-template" src="https://github.com/user-attachments/assets/db3b4f1e-ad0c-4bc6-9feb-77585c79bb57" />
 
-See https://www.youtube.com/watch?v=WyVbhiK8BAc for a demo. 
+## Wait...What? What does this do?
+Watch https://www.youtube.com/watch?v=WyVbhiK8BAc for a live demo. 
 
-Intended targets: DCS World, MSFS 2024, and other D3D11 / D3D12 OpenXR titles. 
+## Features
+- Button-gated passthrough: keyboard keys, XInput gamepad buttons, DirectInput HOTAS/joystick buttons
+- Hold-to-show or toggle mode
+- Brightness, opacity, and various other image processing/geometry configuration sliders. 
+- Standalone configuration GUI (PSVR2PassthroughConfig.exe).
 
-**Alpha software: geometry alignment WIP**
+## Intended targets 
+DCS World, MSFS 2024, and other D3D11 / D3D12 OpenXR titles. 
+
+## Usage
+Unzip to preferred folder and run install.bat, bind a trigger key. Save config. 
+One install, set and forget. No need to run a program every time. Installed layer loads with the game. 
+
+**Alpha software: Rapidly being iterated. Check back often.**
 
 Feedback via [github discussion tab](https://github.com/Obsidiate/psvr2passthrough/discussions) above, or the [offical subreddit /r/psvr2passthrough](https://old.reddit.com/r/psvr2passthrough/)
 
-## What it does
+## All PSVR2 users should also check out 
+ [PSVR2toolkit](https://github.com/BnuuySolutions/PSVR2Toolkit) for enabling eye tracking
+ [QuadViews](https://github.com/mbucchia/Quad-Views-Foveated) to enable it in DCS
+ and [Quadviews Companion](https://github.com/TallyMouse/QuadViewsCompanion) to tweak the foveated rendering values. Amazing projects. 
 
-- **Camera ingestion:** reads stereo grayscale frames directly from the PSVR2 driver's
-   shared-memory interface. No helper process required; the layer talks to the driver directly.
+## What it does - More detail.
+
+- **Camera ingestion:** Reads stereo grayscale frames directly from the PSVR2 driver's
+   shared-memory interface. No helper process required.
 - **Lens undistortion:** applies the per-eye calibration coefficients provided by the driver.
 - **Stereo geometry correction:** corrects for the cameras' physical mounting angle
    (toe-out, tilt-down, roll) via a baked rectification mesh. Adjustable per-eye in the
@@ -64,27 +80,17 @@ a version that translates OpenVR calls to OpenXR. If a game runs through OpenCom
 the layer can load into it (D3D11 titles). This is not officially supported and may not
 work in every game.
 
-## Known Limitations
+## Limitations
 
 - The camera feeds are passed over USB and are a compressed feed at a lower framerate versus the in headset native view, with a resultant drop in quality and potentially higher "VR legs/nausea" effect. Fine for reaching for panels, not for "mixed reality" use.
 - There are mathematical aspects to the undistortion model that may not be exposed to the PC in shared memory that are translated directly in the pipeline from camera > in headset passthrough view. Research continues.
 - A configuration gui has been provided to tweak some values as a result of minor differences between headsets, such as camera rotation.
 - Refinement on theses default values is not completed. Expected iteration of this rapidly in coming weeks.
 - ~30-60 Hz camera feed vs 90/120 Hz game rendering. Passthrough will lag fast head motion slightly.
-- D3D11 and D3D12 host-app graphics supported. Vulkan and OpenGL host apps are not yet supported (layer stays inert). Native OpenVR games are out of scope. See "Working / not-working titles" above.
-
-## Features
-
-- Button-gated passthrough: keyboard keys, XInput gamepad buttons, DirectInput HOTAS/joystick buttons
-- Hold-to-show or toggle mode
-- Brightness, opacity, zoom, and stereo geometry calibration sliders.
-- Standalone configuration GUI (PSVR2PassthroughConfig.exe)
 
 ## What this is NOT
-
 - It does **not** require any helper process beyond SteamVR itself.
 - It does **not** support the top two PSVR2 cameras. Sony does not expose them to PC.
-- It does **not** modify game files or inject into game processes.
 
 ## Build (skip this if downloading a release package)
 
