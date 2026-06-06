@@ -87,6 +87,7 @@ XrResult XRAPI_CALL pt_xrCreateApiLayerInstance(const XrInstanceCreateInfo* crea
 
     resolve("xrCreateSwapchain",         reinterpret_cast<PFN_xrVoidFunction*>(&state->next.xrCreateSwapchain));
     resolve("xrDestroySwapchain",        reinterpret_cast<PFN_xrVoidFunction*>(&state->next.xrDestroySwapchain));
+    resolve("xrEnumerateSwapchainFormats",reinterpret_cast<PFN_xrVoidFunction*>(&state->next.xrEnumerateSwapchainFormats));
     resolve("xrEnumerateSwapchainImages",reinterpret_cast<PFN_xrVoidFunction*>(&state->next.xrEnumerateSwapchainImages));
     resolve("xrAcquireSwapchainImage",   reinterpret_cast<PFN_xrVoidFunction*>(&state->next.xrAcquireSwapchainImage));
     resolve("xrWaitSwapchainImage",      reinterpret_cast<PFN_xrVoidFunction*>(&state->next.xrWaitSwapchainImage));
@@ -148,8 +149,39 @@ XrResult XRAPI_CALL pt_xrDestroyInstance(XrInstance instance) {
 }
 
 // ===========================================================================
-// xrCreateSession — observe D3D11 binding and stand up our LayerSession
+// xrCreateSession — observe the graphics binding and stand up our LayerSession
 // ===========================================================================
+
+// Push the config we loaded at instance creation into the freshly created
+// session. Knobs are captured once and used for the session's lifetime. Shared
+// by the D3D11-native and D3D12 (D3D11On12) adoption paths.
+static void apply_config_to_session(InstanceState* state) {
+    auto& cc = state->session->config();
+    cc.global_alpha             = state->config.global_alpha;
+    cc.brightness_enabled       = state->config.brightness_enabled;
+    cc.brightness               = state->config.brightness;
+    cc.contrast_enabled         = state->config.contrast_enabled;
+    cc.contrast                 = state->config.contrast;
+    cc.enhancements_enabled     = state->config.enhancements_enabled;
+    cc.unsharp_amount           = state->config.unsharp_amount;
+    cc.unsharp_radius           = state->config.unsharp_radius;
+    cc.apply_undistortion       = state->config.apply_undistortion;
+    cc.zoom_factor              = state->config.zoom_factor;
+    cc.reprojection_enabled     = state->config.reprojection_enabled;
+    state->session->set_camera_latency_offset_ns(state->config.camera_latency_offset_ns);
+    state->session->set_debug_reproj_stats(state->config.debug_reprojection_stats);
+    cc.camera_toe_out_rad_l     = state->config.camera_toe_out_rad_l;
+    cc.camera_tilt_down_rad_l   = state->config.camera_tilt_down_rad_l;
+    cc.camera_roll_rad_l        = state->config.camera_roll_rad_l;
+    cc.camera_toe_out_rad_r     = state->config.camera_toe_out_rad_r;
+    cc.camera_tilt_down_rad_r   = state->config.camera_tilt_down_rad_r;
+    cc.camera_roll_rad_r        = state->config.camera_roll_rad_r;
+    state->session->set_passthrough_binding(state->config.passthrough_binding);
+    state->session->set_toggle_mode(state->config.toggle_mode);
+    state->session->set_force_on(state->config.force_passthrough_on);
+    state->session->set_ipd_correction(state->config.ipd_correction_enabled,
+                                       state->config.camera_separation_mm);
+}
 
 XrResult XRAPI_CALL pt_xrCreateSession(XrInstance instance,
                                        const XrSessionCreateInfo* createInfo,
@@ -166,51 +198,62 @@ XrResult XRAPI_CALL pt_xrCreateSession(XrInstance instance,
     // xrCreateSession) can find the session via find_for_session().
     LayerState::get().register_session(*session, state);
 
-    // Walk the next chain looking for a D3D11 binding. If the app is using
-    // D3D12 / Vulkan / OpenGL we currently bail out (this could be extended
-    // later by adding cross-API texture interop).
-    ID3D11Device* device = nullptr;
+    // Walk the next chain looking for a graphics binding. D3D11 is the native,
+    // zero-overhead path. D3D12 is supported via a D3D11-on-12 interop device:
+    // we composite with the same D3D11 Compositor and bridge into the game's
+    // D3D12 swapchain images. Vulkan / OpenGL remain unsupported (layer inert).
+    ID3D11Device*       d3d11_device = nullptr;
+    ID3D12Device*       d3d12_device = nullptr;
+    ID3D12CommandQueue* d3d12_queue  = nullptr;
     for (const XrBaseInStructure* n = static_cast<const XrBaseInStructure*>(createInfo->next);
          n != nullptr;
          n = n->next) {
         if (n->type == XR_TYPE_GRAPHICS_BINDING_D3D11_KHR) {
-            device = reinterpret_cast<const XrGraphicsBindingD3D11KHR*>(n)->device;
-            break;
+            d3d11_device = reinterpret_cast<const XrGraphicsBindingD3D11KHR*>(n)->device;
+            break;  // D3D11 takes precedence; original fast path unchanged
+        }
+        if (n->type == XR_TYPE_GRAPHICS_BINDING_D3D12_KHR) {
+            const auto* b = reinterpret_cast<const XrGraphicsBindingD3D12KHR*>(n);
+            d3d12_device = b->device;
+            d3d12_queue  = b->queue;
+            // keep scanning in case a D3D11 binding also appears (prefer it)
         }
     }
 
-    if (device) {
-        state->session = std::make_unique<LayerSession>(*session, &state->next, device);
-        // Apply the configuration we loaded at instance creation. Knobs are
-        // captured once and used for the lifetime of this session.
-        auto& cc = state->session->config();
-        cc.global_alpha             = state->config.global_alpha;
-        cc.brightness_enabled       = state->config.brightness_enabled;
-        cc.brightness               = state->config.brightness;
-        cc.contrast_enabled         = state->config.contrast_enabled;
-        cc.contrast                 = state->config.contrast;
-        cc.enhancements_enabled     = state->config.enhancements_enabled;
-        cc.unsharp_amount           = state->config.unsharp_amount;
-        cc.unsharp_radius           = state->config.unsharp_radius;
-        cc.apply_undistortion       = state->config.apply_undistortion;
-        cc.zoom_factor              = state->config.zoom_factor;
-        cc.reprojection_enabled     = state->config.reprojection_enabled;
-        state->session->set_camera_latency_offset_ns(state->config.camera_latency_offset_ns);
-        state->session->set_debug_reproj_stats(state->config.debug_reprojection_stats);
-        cc.camera_toe_out_rad_l     = state->config.camera_toe_out_rad_l;
-        cc.camera_tilt_down_rad_l   = state->config.camera_tilt_down_rad_l;
-        cc.camera_roll_rad_l        = state->config.camera_roll_rad_l;
-        cc.camera_toe_out_rad_r     = state->config.camera_toe_out_rad_r;
-        cc.camera_tilt_down_rad_r   = state->config.camera_tilt_down_rad_r;
-        cc.camera_roll_rad_r        = state->config.camera_roll_rad_r;
-        state->session->set_passthrough_binding(state->config.passthrough_binding);
-        state->session->set_toggle_mode(state->config.toggle_mode);
-        state->session->set_force_on(state->config.force_passthrough_on);
-        state->session->set_ipd_correction(state->config.ipd_correction_enabled,
-                                           state->config.camera_separation_mm);
+    if (d3d11_device) {
+        state->session = std::make_unique<LayerSession>(*session, &state->next, d3d11_device);
+        apply_config_to_session(state);
         PT_LOG_INFO("D3D11 session adopted by layer");
+    } else if (d3d12_device && d3d12_queue) {
+        // Build a D3D11-on-12 interop device on the game's D3D12 device/queue.
+        // The resulting ID3D11Device is a real D3D11 device the Compositor uses
+        // unchanged; ID3D11On12Device bridges into the game's D3D12 swapchain.
+        Microsoft::WRL::ComPtr<ID3D11Device>        interop_dev;
+        Microsoft::WRL::ComPtr<ID3D11DeviceContext> interop_ctx;
+        IUnknown* queues[] = { d3d12_queue };
+        HRESULT hr = D3D11On12CreateDevice(
+            d3d12_device,
+            0,                       // flags: no BGRA/D2D needed
+            nullptr, 0,              // let it pick the feature level from the device
+            queues, 1,              // share the game's command queue
+            0,                       // node mask
+            &interop_dev, &interop_ctx, nullptr);
+        Microsoft::WRL::ComPtr<ID3D11On12Device> on12;
+        if (SUCCEEDED(hr))
+            hr = interop_dev.As(&on12);
+
+        if (SUCCEEDED(hr) && on12) {
+            state->session = std::make_unique<LayerSession>(
+                *session, &state->next, interop_dev.Get(), on12.Get(),
+                d3d12_device, d3d12_queue);
+            apply_config_to_session(state);
+            PT_LOG_INFO("D3D12 session adopted by layer via D3D11On12 interop");
+        } else {
+            PT_LOG_ERROR("D3D11On12CreateDevice failed (hr=0x{:08X}); passthrough inert",
+                         static_cast<uint32_t>(hr));
+        }
     } else {
-        PT_LOG_WARN("Non-D3D11 graphics binding detected; passthrough layer inert.");
+        PT_LOG_WARN("Unsupported graphics binding (not D3D11/D3D12); passthrough layer inert.");
     }
     return r;
 }

@@ -2,6 +2,24 @@
 
 ### This is not expected to be perfect 1:1 of in headset passthrough at this Alpha stage but it is veeeeery usable. 
 
+## v0.6-alpha
+
+**Direct3D 12 game support**
+
+The passthrough layer now works with games that render through Direct3D 12, not just Direct3D 11. Previously, when a D3D12 title created its session the layer detected the non-D3D11 graphics binding and went inert, so no passthrough appeared at all. This affected major titles including Microsoft Flight Simulator 2024 in DX12 mode.
+
+Support is implemented via Direct3D 11-on-12 interop: when the host game is D3D12, the layer builds a secondary D3D11 device on the game's *own* D3D12 device and command queue, composites passthrough with the existing (unchanged) D3D11 compositor, and bridges the result into the game's D3D12 swapchain images through wrapped resources. This is a single-GPU, single-queue, fence-synchronised path with no cross-API texture copy and a minimal per-frame synchronisation cost. The swapchain pixel format is now negotiated against the runtime's offered formats rather than assumed, for robustness across titles.
+
+The Direct3D 11 path is unchanged - existing D3D11 titles behave exactly as before with zero added overhead. Vulkan and OpenGL games remain unsupported (the layer stays inert, as it always has for unsupported bindings).
+
+&nbsp;
+
+**Plain English:** D3D12 games like MSFS 2024 (in DX12) now get passthrough - they didn't before. Nothing changes for D3D11 games. If a game uses Vulkan it still won't work yet. The performance cost of the D3D12 path is tiny and shouldn't be noticeable unless you're already pushing your GPU to its limit.
+
+&nbsp;
+
+---
+
 ## v0.4.1-alpha
 
 **IPD correction reliability fix**
