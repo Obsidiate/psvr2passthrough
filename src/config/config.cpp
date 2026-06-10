@@ -99,6 +99,8 @@ std::string config_to_json(const Config& c) {
     os << "  \"pt_di_name\":          \"" << c.passthrough_binding.dinput_device_name << "\",\n";
     os << "  \"apply_undistortion\":    " << (c.apply_undistortion ? "true" : "false") << ",\n";
     os << "  \"zoom_factor\":           " << fmt_float(c.zoom_factor) << ",\n";
+    os << "  \"overlay_distance_m\":    " << fmt_float(c.overlay_distance_m) << ",\n";
+    os << "  \"overlay_alpha\":         " << fmt_float(c.overlay_alpha) << ",\n";
     os << "  \"reprojection_enabled\":     " << (c.reprojection_enabled ? "true" : "false") << ",\n";
     os << "  \"camera_latency_offset_ns\": " << c.camera_latency_offset_ns << ",\n";
     os << "  \"debug_reprojection_stats\": " << (c.debug_reprojection_stats ? "true" : "false") << ",\n";
@@ -151,6 +153,8 @@ bool config_from_json(const std::string& json, Config& out) {
             else if (k == "pt_di_name")         out.passthrough_binding.dinput_device_name   = v;
             else if (k == "apply_undistortion")   out.apply_undistortion     = (v == "true");
             else if (k == "zoom_factor")          out.zoom_factor            = std::stof(v);
+            else if (k == "overlay_distance_m")   out.overlay_distance_m     = std::stof(v);
+            else if (k == "overlay_alpha")        out.overlay_alpha          = std::stof(v);
             else if (k == "reprojection_enabled")   out.reprojection_enabled   = (v == "true");
             else if (k == "ipd_correction_enabled") out.ipd_correction_enabled = (v == "true");
             else if (k == "camera_separation_mm")   out.camera_separation_mm   = std::stof(v);
@@ -189,6 +193,10 @@ bool config_from_json(const std::string& json, Config& out) {
     if (out.unsharp_radius > 4.0f) out.unsharp_radius = 4.0f;
     if (out.zoom_factor    < 0.5f) out.zoom_factor    = 0.5f;
     if (out.zoom_factor    > 4.0f) out.zoom_factor    = 4.0f;
+    if (out.overlay_distance_m < 0.3f) out.overlay_distance_m = 0.3f;
+    if (out.overlay_distance_m > 5.0f) out.overlay_distance_m = 5.0f;
+    if (out.overlay_alpha      < 0.1f) out.overlay_alpha      = 0.1f;
+    if (out.overlay_alpha      > 1.0f) out.overlay_alpha      = 1.0f;
     if (out.camera_separation_mm < 40.f)  out.camera_separation_mm = 40.f;
     if (out.camera_separation_mm > 120.f) out.camera_separation_mm = 120.f;
     if (out.camera_latency_offset_ns < 0)           out.camera_latency_offset_ns = 0;

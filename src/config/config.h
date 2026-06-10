@@ -36,6 +36,12 @@ struct Config {
     bool  apply_undistortion   = true;
     float zoom_factor          = 1.0f;
 
+    // OpenVR overlay (PSVR2PassthroughOverlay.exe) — ignored by the OpenXR layer.
+    // The overlay is head-locked at overlay_distance_m and sized from the camera
+    // FOV; overlay_alpha sets its opacity (1 = fully opaque).
+    float overlay_distance_m   = 1.5f;   // [0.3 .. 5.0]
+    float overlay_alpha        = 1.0f;   // [0.1 .. 1.0]
+
     // Reprojection: experimental, off by default.
     bool    reprojection_enabled     = false;
     int64_t camera_latency_offset_ns = 16'000'000;  // USB+exposure latency estimate (ns); tune empirically

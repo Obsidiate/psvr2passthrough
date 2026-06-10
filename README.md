@@ -1,6 +1,12 @@
 # PSVR2 Passthrough Layer
 
-An OpenXR implicit API layer that injects real-time stereo passthrough from the PSVR2's built-in bottom cameras into any OpenXR application running under SteamVR on PC.
+Real-time stereo passthrough from the PSVR2's built-in bottom cameras into your
+SteamVR games on PC. Ships in two forms that share one engine:
+
+- an **OpenXR API layer** that injects passthrough into OpenXR games (DCS, MSFS), and
+- an **OpenVR overlay app** that composites passthrough over *any* SteamVR game —
+  **including native-OpenVR titles like Half-Life: Alyx** that an OpenXR layer can
+  never attach to. No OpenComposite required.
 
 <img width="1266" height="636" alt="repository-open-graph-template" src="https://github.com/user-attachments/assets/db3b4f1e-ad0c-4bc6-9feb-77585c79bb57" />
 
@@ -51,39 +57,73 @@ Feedback via [github discussion tab](https://github.com/Obsidiate/psvr2passthrou
 - **OBS recording / mirror layer compatible**
 - **OpenKneeboard compatible**
 
+## Architecture
+
+Both front-ends share one runtime-agnostic engine (camera ingestion, calibration,
+undistortion/rectification mesh, and the D3D11 render pass). Only the final
+submission differs: the layer hooks `xrEndFrame`; the overlay submits an OpenVR
+overlay texture.
+
+```
+                 PSVR2 driver (SteamVR)
+                 shared memory + event + mutex
+                            │
+                psvr2_passthrough_core
+        (camera ingest · calibration · FOV/IPD math ·
+         undistortion mesh · D3D11 render pass)
+                    ┌───────┴───────┐
+                    ▼               ▼
+        OpenXR API layer      OpenVR overlay app
+        (PSVR2Passthrough-    (PSVR2Passthrough-
+         Layer.dll,            Overlay.exe,
+         xrEndFrame hook)      IVROverlay texture,
+                               head-locked)
+                    └───────┬───────┘
+                            ▼
+                   SteamVR compositor
+                            ▼
+                      PSVR2 headset
+```
+
+- **OpenXR layer** — zero extra process; loads into OpenXR games (D3D11/D3D12).
+- **OpenVR overlay** — a background app SteamVR composites over every game,
+  regardless of graphics API, so it reaches native-OpenVR titles too.
+
 ## Working / not-working titles
 
-This layer hooks **OpenXR**. It loads into any game that renders through the OpenXR
-runtime with a **Direct3D 11 or Direct3D 12** graphics binding. It cannot load into
-games that use other APIs. See below.
+Pick the front-end that matches the game:
 
-**Known working**
+- **OpenXR games** (D3D11/D3D12) → the **OpenXR layer** loads automatically.
+- **Native-OpenVR games** (no OpenXR loader) → run the **OpenVR overlay app**.
+  This is the recommended path for Alyx, No Man's Sky, etc. — no OpenComposite needed.
+
+**Known working — OpenXR layer**
 
 | Title | Graphics API | Notes |
 |-------|--------------|-------|
 | DCS World | D3D11 | Primary development and target title. Quad-views tested. |
 | Microsoft Flight Simulator 2024 | D3D12 | Works in DX12 mode via D3D11-on-12 interop. Expect the usual GPU-bound framerate cost at high graphics settings. |
 
-**Known not working**
+**Known working — OpenVR overlay**
 
 | Title | Why |
 |-------|-----|
-| Half-Life: Alyx | Native OpenVR/SteamVR title. It does not use OpenXR (it ships `openvr_api.dll` and no OpenXR loader), so no OpenXR layer can attach. |
-| No Man's Sky | Native OpenVR. Same reason. |
+| Half-Life: Alyx | Native OpenVR title. The overlay composites over it via SteamVR, so passthrough works without OpenComposite. |
+| No Man's Sky | Native OpenVR. Same — covered by the overlay. |
+| (any SteamVR game) | The overlay sits at the SteamVR compositor level, so it is API-agnostic. |
 
-**Why native OpenVR games can't work (Alyx, No Man's Sky, etc.)**
+**Why the overlay reaches games the layer can't**
 
-Some VR games render through Valve's older OpenVR API instead of OpenXR. This
-passthrough is an OpenXR API layer, so it only loads into games that use the OpenXR
-loader. An OpenVR game never calls OpenXR, so the layer never loads into it. Nothing
-shows up in the log when this happens, because the layer was never running. This is
-down to how those games are built, not a bug in the layer.
+Some VR games render through Valve's older OpenVR API instead of OpenXR. An OpenXR
+API layer only loads into games that use the OpenXR loader, so it never attaches to a
+native-OpenVR game. The **OpenVR overlay app** sidesteps this entirely: it is a
+standalone SteamVR overlay that the compositor draws over whatever game is running,
+regardless of which graphics/VR API that game uses.
 
-You can sometimes route an OpenVR game through OpenXR with a community tool called
-[OpenComposite](https://gitlab.com/znixian/OpenOVR), which swaps `openvr_api.dll` for
-a version that translates OpenVR calls to OpenXR. If a game runs through OpenComposite,
-the layer can load into it (D3D11 titles). This is not officially supported and may not
-work in every game.
+> Note: overlay passthrough is **full-FOV, opaque, head-locked, toggleable room
+> visibility** — it does not interact with game content. (OpenComposite is still an
+> option if you specifically want an OpenVR game to run *through the OpenXR layer*,
+> but it is not required for passthrough.)
 
 ## Limitations
 
@@ -94,7 +134,9 @@ work in every game.
 - ~30-60 Hz camera feed vs 90/120 Hz game rendering. Passthrough will lag fast head motion slightly.
 
 ## What this is NOT
-- It does **not** require any helper process beyond SteamVR itself.
+- The **OpenXR layer** does **not** require any helper process beyond SteamVR itself.
+  The **OpenVR overlay** is itself a small background process (it autostarts with
+  SteamVR once registered).
 - It does **not** support the top two PSVR2 cameras. Sony does not expose them to PC.
 
 ## Build (skip this if downloading a release package)
@@ -113,10 +155,13 @@ cmake --build build --config Release
 ```
 
 Output:
-- `build/src/layer/Release/PSVR2PassthroughLayer.dll` : the API layer
+- `build/src/layer/Release/PSVR2PassthroughLayer.dll` : the OpenXR API layer
+- `build/src/overlay/Release/PSVR2PassthroughOverlay.exe` : the OpenVR overlay app
 - `build/src/gui/Release/PSVR2PassthroughConfig.exe` : the configuration GUI
 
 ## Install
+
+### OpenXR layer (OpenXR games — DCS, MSFS)
 
 unzip release to installation folder and use the install.bat, or 
 
@@ -135,6 +180,25 @@ To uninstall:
 uninstall_layer.ps1
 ```
 
+### OpenVR overlay (native-OpenVR games — Alyx, No Man's Sky, …)
+
+Register the overlay with SteamVR once; it then autostarts with SteamVR:
+
+```powershell
+PSVR2PassthroughOverlay.exe --register
+```
+
+To stop it autostarting and remove it from SteamVR:
+
+```powershell
+PSVR2PassthroughOverlay.exe --unregister
+```
+
+`--register` installs `manifest.vrmanifest` (shipped next to the exe) via SteamVR's
+application registry and enables autolaunch. Toggle passthrough with your configured
+button binding, or with the default SteamVR binding (right Sense **B**, long-press),
+which you can remap in SteamVR's controller-binding UI.
+
 ## Configuration
 
 YOU MUST Run `PSVR2PassthroughConfig.exe` to configure the binding to show the layer. The GUI provides:
@@ -145,10 +209,12 @@ YOU MUST Run `PSVR2PassthroughConfig.exe` to configure the binding to show the l
   with hold-to-show or toggle-on/off mode
 - Lens undistortion toggle and zoom control
 - Per-eye stereo geometry sliders (toe-out, tilt-down, roll) in degrees, with paired or independent adjustment
+- OpenVR overlay settings (virtual distance, opacity) for native-OpenVR games
 - Headset intrinsics display (fx, fy, cx, cy read from the PSVR2 driver)
 
-Settings are saved to `%LOCALAPPDATA%\PSVR2PassthroughLayer\config.json` and
-take effect on the next sim launch.
+Settings are saved to `%LOCALAPPDATA%\PSVR2PassthroughLayer\config.json` and are
+shared by **both** front-ends — the OpenXR layer reads them on the next sim launch,
+and the OpenVR overlay reads them on launch.
 
 ## Runtime requirements
 
@@ -158,9 +224,12 @@ take effect on the next sim launch.
 Start SteamVR with the headset connected, then launch your sim normally. The
 layer activates automatically.
 
-## Log file
+## Log files
 
-`%LOCALAPPDATA%\PSVR2PassthroughLayer\layer.log` : truncated on each launch.
+Both truncated on each launch, in `%LOCALAPPDATA%\PSVR2PassthroughLayer\`:
+
+- `layer.log` : the OpenXR layer
+- `overlay.log` : the OpenVR overlay app
 
 ## Attributions
 
@@ -169,6 +238,7 @@ layer activates automatically.
 - **[Dear ImGui](https://github.com/ocornut/imgui)** by Omar Cornut: immediate-mode GUI library used for the configuration app.
 - **[spdlog](https://github.com/gabime/spdlog)** / **[fmt](https://github.com/fmtlib/fmt)**: logging and string formatting.
 - **[Khronos OpenXR SDK](https://github.com/KhronosGroup/OpenXR-SDK)**: OpenXR loader and headers.
+- **[OpenVR SDK](https://github.com/ValveSoftware/openvr)** by Valve: overlay, input, and application APIs used by the OpenVR overlay app.
 
 ## Licence
 

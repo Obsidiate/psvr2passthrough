@@ -152,10 +152,16 @@ void OverlayApp::apply_config_() {
     comp_cfg_.camera_roll_rad_r      = config_.camera_roll_rad_r;
 
     camera_separation_m_ = config_.camera_separation_mm / 1000.f;
+    overlay_distance_m_  = config_.overlay_distance_m;
 
     // Reprojection is OpenXR-pose driven and irrelevant to the overlay; the
     // SteamVR compositor reprojects the head-locked quad for us.
     comp_cfg_.reprojection_enabled = false;
+
+    // Overlay opacity from config.
+    if (overlay_handle_ != vr::k_ulOverlayHandleInvalid && vr::VROverlay()) {
+        vr::VROverlay()->SetOverlayAlpha(overlay_handle_, config_.overlay_alpha);
+    }
 
     // Legacy (keyboard/XInput/DInput) binding shared with the layer.
     poller_.set_binding(config_.passthrough_binding);

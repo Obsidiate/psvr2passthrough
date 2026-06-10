@@ -1,5 +1,23 @@
 # Design notes
 
+## Two front-ends, one core
+
+The runtime-agnostic engine lives in static libs with **no OpenXR or OpenVR
+includes**: `psvr2pt_core` (camera ingest, calibration, FOV/IPD math,
+undistortion mesh, input), `psvr2pt_render` (the D3D11 `Compositor`), and
+`psvr2pt_config`. Two thin front-ends consume them:
+
+- **OpenXR API layer** (`src/layer/`, `PSVR2PassthroughLayer.dll`) — hooks
+  `xrEndFrame`, submits an `XrCompositionLayerProjection`. Used by OpenXR games.
+- **OpenVR overlay app** (`src/overlay/`, `PSVR2PassthroughOverlay.exe`) — a
+  standalone `VRApplication_Overlay` process that submits a head-locked,
+  side-by-side overlay texture via `IVROverlay`. Composites over *any* SteamVR
+  game, so it reaches native-OpenVR titles the layer can't attach to.
+
+The `Compositor` renders each eye into a standalone RGBA texture, so neither
+front-end is coupled to it: the layer `CopyResource`s into OpenXR swapchains; the
+overlay copies both eyes side-by-side and calls `SetOverlayTexture`.
+
 ## Pipeline
 
 ```

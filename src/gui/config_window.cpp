@@ -48,6 +48,8 @@ bool configs_equal(const Config& a, const Config& b) {
         && a.passthrough_binding.dinput_button_index== b.passthrough_binding.dinput_button_index
         && a.apply_undistortion       == b.apply_undistortion
         && a.zoom_factor              == b.zoom_factor
+        && a.overlay_distance_m       == b.overlay_distance_m
+        && a.overlay_alpha            == b.overlay_alpha
         && a.camera_eyes_linked       == b.camera_eyes_linked
         && a.camera_toe_out_rad_l     == b.camera_toe_out_rad_l
         && a.camera_tilt_down_rad_l   == b.camera_tilt_down_rad_l
@@ -304,6 +306,17 @@ void ConfigWindow::draw_main_panel() {
     ImGui::Checkbox("Apply lens undistortion", &working_.apply_undistortion);
     ImGui::SliderFloat("Zoom factor", &working_.zoom_factor, 0.5f, 4.0f, "%.2f");
     TextHint("Higher zoom = narrower FOV, fewer lens artefacts at edges.");
+    ImGui::Spacing();
+
+    // -----------------------------------------------------------------------
+    ImGui::SeparatorText("OpenVR overlay (native-OpenVR games)");
+    TextHint("Used by PSVR2PassthroughOverlay.exe, which covers native-OpenVR titles");
+    TextHint("(e.g. Half-Life: Alyx) that the OpenXR layer cannot attach to.");
+    TextHint("These settings have no effect on the OpenXR layer.");
+    ImGui::SliderFloat("Overlay distance (m)", &working_.overlay_distance_m, 0.3f, 5.0f, "%.2f m");
+    TextHint("Head-locked virtual distance of the passthrough quad. Default 1.5 m.");
+    ImGui::SliderFloat("Overlay opacity", &working_.overlay_alpha, 0.1f, 1.0f, "%.2f");
+    TextHint("1.0 = fully opaque. Lower values let the game show through.");
     ImGui::Spacing();
 
     // -----------------------------------------------------------------------
