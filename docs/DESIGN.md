@@ -18,6 +18,45 @@ The `Compositor` renders each eye into a standalone RGBA texture, so neither
 front-end is coupled to it: the layer `CopyResource`s into OpenXR swapchains; the
 overlay copies both eyes side-by-side and calls `SetOverlayTexture`.
 
+## Why keep both front-ends (the overlay does not subsume the layer)
+
+SteamVR is always running while the PSVR2 driver is active, so the OpenVR overlay
+*can* technically draw over OpenXR titles too. It is tempting to conclude the
+layer is redundant. It is not — the two submit fundamentally different primitives,
+and for OpenXR titles the layer is strictly better:
+
+- **Layer → `XrCompositionLayerProjection`.** Passthrough is composited in the
+  *same projected space* as the game, using the game's own per-eye pose and a
+  camera-derived FOV, and rides the runtime's asynchronous reprojection (ATW)
+  frame-for-frame with the game. See `compose_layer()` in
+  `src/layer/layer_session.cpp`.
+- **Overlay → `IVROverlay` quad.** A head-locked billboard at a fixed virtual
+  distance, sized to fill the camera frustum. SteamVR reprojects it, but as a flat
+  quad pinned to the headset — not a true per-eye projection sharing the game's
+  frustum. (This is exactly the quad-vs-projection trade-off described below.)
+
+Concretely, the layer gives OpenXR titles three things the overlay cannot:
+
+1. **Per-eye projection fidelity** — composited in the game's projected space, not
+   as a billboard; better depth agreement, less "floating screen" feel.
+2. **Quad-views (foveated) support** — the layer handles `viewCount == 4`
+   (DCS with Quad-Views-Foveated); an overlay billboard has no notion of the
+   game's quad-views render.
+3. **Tighter reprojection coupling** — it rides the game's ATW using the game's
+   pose, rather than being reprojected as an independent billboard.
+
+The overlay's advantage is the mirror image: because it never touches the game's
+frame (it owns its own D3D11 device and submits a finished texture), it is
+**API-agnostic** and reaches native-OpenVR games the layer can never attach to.
+That independence is *why* it can't match projection fidelity.
+
+So the split is deliberate: each title uses its best path — OpenXR titles
+(DCS, MSFS) get the layer; native-OpenVR titles (Alyx, No Man's Sky) get the
+overlay. Collapsing to overlay-only is viable and would cut maintenance (no
+`xrEndFrame` hook, no D3D11On12 interop, one binary), but it would downgrade the
+primary, most-iterated target (DCS) to billboard-quality passthrough and drop
+quad-views support — so both are kept.
+
 ## Pipeline
 
 ```
