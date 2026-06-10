@@ -2,7 +2,9 @@
 
 #include "logging.h"
 #include "fov.h"
+#include "frame.h"
 
+#include <cmath>
 #include <thread>
 #include <chrono>
 
@@ -27,6 +29,7 @@ bool OverlayApp::initialise() {
     if (!init_d3d_())               return false;
     if (!init_vr_())                return false;
     if (!init_camera_and_compositor_()) return false;
+    apply_config_();
     return true;
 }
 
@@ -75,12 +78,13 @@ bool OverlayApp::init_vr_() {
         return false;
     }
 
-    // Commit-2 baseline placement: opaque, modest width, in front of the HMD.
-    // Proper FOV-derived sizing + head-locked transform land in Commit 3.
+    // Opaque side-by-side overlay. Width + head-locked transform are computed
+    // from the camera FOV in update_overlay_placement_() once the compositor is up.
     vr::VROverlay()->SetOverlayAlpha(overlay_handle_, 1.0f);
-    vr::VROverlay()->SetOverlayWidthInMeters(overlay_handle_, 1.0f);
     vr::VROverlay()->SetOverlayFlag(
         overlay_handle_, vr::VROverlayFlags_SideBySide_Parallel, true);
+    // Sort in front of other overlays and don't let it become interactive.
+    vr::VROverlay()->SetOverlayInputMethod(overlay_handle_, vr::VROverlayInputMethod_None);
 
     PT_LOG_INFO("Overlay created (handle={}).", overlay_handle_);
     return true;
@@ -110,6 +114,35 @@ bool OverlayApp::init_camera_and_compositor_() {
     return ensure_output_texture_();
 }
 
+void OverlayApp::apply_config_() {
+    // Load the shared on-disk config (same file the layer and GUI use) and map
+    // it into the CompositorConfig, mirroring layer_main.cpp's apply path.
+    config_ = load_config();
+
+    comp_cfg_.global_alpha           = config_.global_alpha;
+    comp_cfg_.brightness_enabled     = config_.brightness_enabled;
+    comp_cfg_.brightness             = config_.brightness;
+    comp_cfg_.contrast_enabled       = config_.contrast_enabled;
+    comp_cfg_.contrast               = config_.contrast;
+    comp_cfg_.enhancements_enabled   = config_.enhancements_enabled;
+    comp_cfg_.unsharp_amount         = config_.unsharp_amount;
+    comp_cfg_.unsharp_radius         = config_.unsharp_radius;
+    comp_cfg_.apply_undistortion     = config_.apply_undistortion;
+    comp_cfg_.zoom_factor            = config_.zoom_factor;
+    comp_cfg_.camera_toe_out_rad_l   = config_.camera_toe_out_rad_l;
+    comp_cfg_.camera_tilt_down_rad_l = config_.camera_tilt_down_rad_l;
+    comp_cfg_.camera_roll_rad_l      = config_.camera_roll_rad_l;
+    comp_cfg_.camera_toe_out_rad_r   = config_.camera_toe_out_rad_r;
+    comp_cfg_.camera_tilt_down_rad_r = config_.camera_tilt_down_rad_r;
+    comp_cfg_.camera_roll_rad_r      = config_.camera_roll_rad_r;
+
+    camera_separation_m_ = config_.camera_separation_mm / 1000.f;
+
+    // Reprojection is OpenXR-pose driven and irrelevant to the overlay; the
+    // SteamVR compositor reprojects the head-locked quad for us.
+    comp_cfg_.reprojection_enabled = false;
+}
+
 bool OverlayApp::ensure_output_texture_() {
     if (overlay_tex_) return true;
 
@@ -131,19 +164,79 @@ bool OverlayApp::ensure_output_texture_() {
     return true;
 }
 
+void OverlayApp::update_overlay_placement_() {
+    // Head-locked: overlay pose is expressed relative to the HMD tracked device,
+    // so the quad rides with the head (correct, since the cameras are head-mounted).
+    // SteamVR's overlay reprojection handles frame timing.
+    //
+    // OpenVR matrix is row-major 3x4 [R | t]. We place the quad centred on the
+    // HMD forward axis (-Z in HMD space) at overlay_distance_m_, facing the user.
+    vr::HmdMatrix34_t xform{};
+    xform.m[0][0] = 1.f; xform.m[0][1] = 0.f; xform.m[0][2] = 0.f; xform.m[0][3] = 0.f;
+    xform.m[1][0] = 0.f; xform.m[1][1] = 1.f; xform.m[1][2] = 0.f; xform.m[1][3] = 0.f;
+    xform.m[2][0] = 0.f; xform.m[2][1] = 0.f; xform.m[2][2] = 1.f; xform.m[2][3] = -overlay_distance_m_;
+    vr::VROverlay()->SetOverlayTransformTrackedDeviceRelative(
+        overlay_handle_, vr::k_unTrackedDeviceIndex_Hmd, &xform);
+
+    // Width: fill the camera horizontal frustum at the chosen depth. The
+    // side-by-side overlay shows one eye's frustum per eye, so size to a single
+    // eye's horizontal angular extent.
+    const CameraIntrinsics intr = camera_->intrinsics(CameraId::Left);
+    if (intr.fx <= 0.0 || intr.fy <= 0.0) {
+        // Calibration not available yet (camera not connected). Retry next frame
+        // once the driver shared memory appears; transform is already set.
+        return;
+    }
+    const EyeFov fov = fov_from_intrinsics(intr, kCameraWidth, kCameraHeight,
+                                           config_.zoom_factor);
+    const float width_m =
+        overlay_distance_m_ * (std::tan(fov.angle_right) + std::tan(-fov.angle_left));
+    vr::VROverlay()->SetOverlayWidthInMeters(overlay_handle_, width_m);
+
+    PT_LOG_INFO("Overlay placement: distance={:.2f}m width={:.2f}m", overlay_distance_m_, width_m);
+    placement_done_ = true;
+}
+
+void OverlayApp::update_ipd_() {
+    if (!config_.ipd_correction_enabled) {
+        if (comp_cfg_.ipd_toe_delta_l != 0.f || comp_cfg_.ipd_toe_delta_r != 0.f) {
+            comp_cfg_.ipd_toe_delta_l = 0.f;
+            comp_cfg_.ipd_toe_delta_r = 0.f;
+        }
+        return;
+    }
+
+    vr::ETrackedPropertyError perr = vr::TrackedProp_Success;
+    float ipd = vr_system_->GetFloatTrackedDeviceProperty(
+        vr::k_unTrackedDeviceIndex_Hmd, vr::Prop_UserIpdMeters_Float, &perr);
+    if (perr != vr::TrackedProp_Success || ipd <= 0.f) {
+        ipd = (last_ipd_m_ > 0.f) ? last_ipd_m_ : 0.064f;  // fallback: last known or 64mm
+    }
+
+    if (std::abs(ipd - last_ipd_m_) > 0.0005f) {   // 0.5mm threshold (matches layer)
+        last_ipd_m_ = ipd;
+        ipd_toe_deltas(ipd, camera_separation_m_,
+                       comp_cfg_.ipd_toe_delta_l, comp_cfg_.ipd_toe_delta_r);
+        PT_LOG_INFO("Overlay IPD correction: ipd={:.1f}mm cam_sep={:.1f}mm delta={:.4f}rad",
+                    ipd * 1000.f, camera_separation_m_ * 1000.f, comp_cfg_.ipd_toe_delta_r);
+    }
+}
+
 void OverlayApp::render_and_submit_() {
     if (!compositor_ready_ || !overlay_tex_) return;
 
-    // Pull the newest camera frame (non-blocking; the run() loop gates timing).
-    const bool have_new = camera_ && camera_->try_get_latest(cached_frame_);
-    if (have_new) {
+    if (!placement_done_) update_overlay_placement_();
+    update_ipd_();
+
+    // Pull the newest camera frame (non-blocking; run() gates timing on the
+    // camera event). If none is new we still re-render so config/IPD changes and
+    // last-frame persistence hold (resilient to camera dropout — no crash).
+    if (camera_ && camera_->try_get_latest(cached_frame_)) {
         compositor_->upload_frame(cached_frame_);
     }
-    // Re-render every wake so config/IPD changes take effect; if no frame has
-    // ever arrived the compositor renders its (empty) targets harmlessly.
     compositor_->render(comp_cfg_);
 
-    // Copy each eye into its half of the side-by-side target.
+    // Copy each eye into its half of the side-by-side target (left | right).
     for (int eye = 0; eye < 2; ++eye) {
         const D3D11_BOX src{ 0, 0, 0, eye_w_, eye_h_, 1 };
         ctx_->CopySubresourceRegion(
@@ -155,11 +248,12 @@ void OverlayApp::render_and_submit_() {
     vr::Texture_t tex{};
     tex.handle      = overlay_tex_.Get();
     tex.eType       = vr::TextureType_DirectX;
-    tex.eColorSpace = vr::ColorSpace_Auto;  // gamma/linear verified in Commit 3
+    // Compositor output is R8G8B8A8_UNORM (linear, premultiplied alpha), matching
+    // the OpenXR layer's swapchain. ColorSpace_Linear avoids a double gamma.
+    tex.eColorSpace = vr::ColorSpace_Linear;
     vr::VROverlay()->SetOverlayTexture(overlay_handle_, &tex);
 
-    // Commit-2 baseline: always visible so we can see the texture path working.
-    // Toggle + show/hide arrives in Commit 4.
+    // Always visible for now; toggle (show/hide) lands in Commit 4.
     vr::VROverlay()->ShowOverlay(overlay_handle_);
 }
 
@@ -181,11 +275,12 @@ void OverlayApp::run() {
         pump_vr_events_();
         if (should_quit_) break;
 
-        render_and_submit_();
+        // Wake at camera rate, not a render-rate spin. The timeout doubles as a
+        // heartbeat so VR events (quit) and IPD/placement are still serviced even
+        // if the camera feed stalls (dropout shows the last frame, no crash).
+        camera_->wait_for_frame(/*timeout_ms=*/100);
 
-        // Commit-2 placeholder pacing. Commit 3 replaces this with a wait on the
-        // camera frame event so we wake at camera rate, not a fixed sleep.
-        std::this_thread::sleep_for(std::chrono::milliseconds(16));
+        render_and_submit_();
     }
     PT_LOG_INFO("Overlay run loop exited.");
 }

@@ -29,7 +29,7 @@ CliAction parse_cli(const std::wstring& cmdline) {
 }  // namespace
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR lpCmdLine, int) {
-    init_logging();
+    init_logging("overlay.log");
 
     const CliAction action = parse_cli(lpCmdLine ? lpCmdLine : L"");
     switch (action) {

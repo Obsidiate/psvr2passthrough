@@ -6,9 +6,11 @@
 
 namespace psvr2pt {
 
-// Initialise once at layer load. Writes to %LOCALAPPDATA%\PSVR2PassthroughLayer\layer.log
-// plus, in debug builds, OutputDebugString.
-void init_logging();
+// Initialise once at layer load. Writes to
+// %LOCALAPPDATA%\PSVR2PassthroughLayer\<log_filename> plus, in debug builds,
+// OutputDebugString. The overlay passes its own filename so it doesn't truncate
+// the layer's log when both run.
+void init_logging(const char* log_filename = "layer.log");
 
 // Returns %LOCALAPPDATA%\PSVR2PassthroughLayer\ (created if absent).
 std::filesystem::path get_layer_data_dir();

@@ -7,6 +7,7 @@
 #include <atomic>
 #include <thread>
 #include <mutex>
+#include <condition_variable>
 #include <memory>
 
 namespace psvr2pt {
@@ -30,6 +31,13 @@ public:
     // Non-blocking. Returns false if no frame has been received yet.
     bool try_get_latest(StereoFrame& out);
 
+    // Blocks until a new frame is available or the timeout elapses. Returns true
+    // if a new frame is ready (the caller should then call try_get_latest).
+    // Lets a consumer with no external pacing (e.g. the OpenVR overlay) wake at
+    // camera rate instead of spinning. The OpenXR layer doesn't use this — it is
+    // paced by the host game's frame loop.
+    bool wait_for_frame(unsigned timeout_ms);
+
     // Non-blocking. Reads the most recent driver pose from shared memory.
     // Safe to call from any thread while the source is running.
     bool get_latest_pose(Pose3f& out) const;
@@ -50,6 +58,7 @@ private:
     StereoFrame       front_;
     std::mutex        front_mutex_;
     std::atomic<bool> have_frame_{false};
+    std::condition_variable frame_cv_;   // notified by producer on each new frame
     uint64_t          last_seq_ = 0;
 
     CameraIntrinsics  intrinsics_[2]{};

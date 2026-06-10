@@ -312,6 +312,7 @@ bool CameraSource::start() {
 
 void CameraSource::stop() {
     if (!running_.exchange(false)) return;
+    frame_cv_.notify_all();   // wake any consumer blocked in wait_for_frame
     if (worker_.joinable()) worker_.join();
     cleanup_shared_memory(impl_->shm);
     PT_LOG_INFO("CameraSource stopped");
@@ -349,9 +350,17 @@ void CameraSource::thread_loop() {
             front_.captured_pose = staging.captured_pose;
             staging.left.resize(kBC4DataSize);
             staging.right.resize(kBC4DataSize);
+            have_frame_.store(true);
         }
-        have_frame_.store(true);
+        frame_cv_.notify_all();
     }
+}
+
+bool CameraSource::wait_for_frame(unsigned timeout_ms) {
+    std::unique_lock lock(front_mutex_);
+    if (have_frame_.load()) return true;
+    return frame_cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms),
+                              [this] { return have_frame_.load(); });
 }
 
 bool CameraSource::try_get_latest(StereoFrame& out) {

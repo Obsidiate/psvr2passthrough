@@ -22,13 +22,13 @@ std::filesystem::path get_layer_data_dir() {
     return std::filesystem::temp_directory_path();
 }
 
-void init_logging() {
+void init_logging(const char* log_filename) {
     static bool initialised = false;
     if (initialised) return;
     initialised = true;
 
     try {
-        const auto log_path = get_layer_data_dir() / "layer.log";
+        const auto log_path = get_layer_data_dir() / log_filename;
 
         std::vector<spdlog::sink_ptr> sinks;
         sinks.emplace_back(std::make_shared<spdlog::sinks::basic_file_sink_mt>(
