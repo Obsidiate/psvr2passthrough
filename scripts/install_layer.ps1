@@ -62,4 +62,37 @@ New-ItemProperty -Path $key -Name $manifest -Value 0 -PropertyType DWord -Force 
 Write-Host "Registered PSVR2 Passthrough Layer (HKLM):"
 Write-Host "  $manifest"
 Write-Host ""
+
+# ---------------------------------------------------------------------------
+# OpenVR overlay (native-OpenVR games). Registers the overlay app with SteamVR
+# and enables autolaunch via PSVR2PassthroughOverlay.exe --register. This does
+# NOT need admin, but DOES need SteamVR running (it opens a Utility VR session),
+# so it is best-effort: if it fails the layer install still succeeds and we tell
+# the user how to register the overlay later.
+$overlayExe = $null
+$localExe = Get-ChildItem -Path $PSScriptRoot -Filter "PSVR2PassthroughOverlay.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($localExe) {
+    $overlayExe = $localExe.FullName
+} else {
+    $buildExe = Get-ChildItem -Path "$PSScriptRoot\..\build\src\overlay\Release" -Filter "PSVR2PassthroughOverlay.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($buildExe) { $overlayExe = $buildExe.FullName }
+}
+
+if ($overlayExe) {
+    Write-Host "Registering OpenVR overlay with SteamVR (autolaunch)..."
+    # The overlay is a GUI-subsystem exe, so the call operator (&) does not wait
+    # or set $LASTEXITCODE. Start-Process -Wait -PassThru does both.
+    $ov = Start-Process -FilePath $overlayExe -ArgumentList "--register" -Wait -PassThru
+    if ($ov.ExitCode -eq 0) {
+        Write-Host "Registered OpenVR overlay (autostarts with SteamVR):"
+        Write-Host "  $overlayExe"
+    } else {
+        Write-Warning "Could not register the OpenVR overlay (is SteamVR running?)."
+        Write-Warning "Start SteamVR, then run:  `"$overlayExe`" --register"
+    }
+} else {
+    Write-Warning "PSVR2PassthroughOverlay.exe not found; skipped overlay registration."
+}
+
+Write-Host ""
 Write-Host "To uninstall: .\uninstall_layer.ps1"
