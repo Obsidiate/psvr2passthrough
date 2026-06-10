@@ -4,6 +4,7 @@
     "description": "OpenXR API layer providing full passthrough video on PSVR2 PC adapter",
     "dependencies": [
         "openxr-loader",
+        "openvr",
         "directxtk",
         "fmt",
         "spdlog",

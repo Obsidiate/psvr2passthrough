@@ -34,6 +34,7 @@ add_subdirectory(src/config)      # shared config (used by both layer and GUI)
 add_subdirectory(src/core)        # camera ingest, undistortion, shared-memory, input binding
 add_subdirectory(src/render)      # D3D11 compositor used by the layer
 add_subdirectory(src/layer)       # the actual OpenXR API layer DLL
+add_subdirectory(src/overlay)     # standalone OpenVR overlay app (native-OpenVR games)
 add_subdirectory(src/gui)         # standalone configurator executable
 
 # Manifest generation --------------------------------------------------------
