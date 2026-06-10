@@ -13,6 +13,8 @@ assets/*.tflite
 
 # Private / local-only files
 .claude/
+CLAUDE.md
+claude-code-prompt-steamvr-branch.md
 handoff.md
 
 # Hand-tracking material — kept locally, excluded from V1 release

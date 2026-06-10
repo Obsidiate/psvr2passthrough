@@ -3,6 +3,8 @@ add_library(psvr2pt_core STATIC
     shared_memory.h
     distortion.cpp
     distortion.h
+    fov.cpp
+    fov.h
     camera_source.cpp
     camera_source.h
     frame.h

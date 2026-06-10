@@ -1,6 +1,7 @@
 #include "layer_session.h"
 #include "layer_dispatch.h"
 #include "logging.h"
+#include "fov.h"
 
 #include <cmath>
 
@@ -297,20 +298,17 @@ LayerSession::compose_layer(const XrFrameEndInfo* original) {
         if (std::abs(raw_ipd - last_ipd_m_) > 0.0005f) {
             last_ipd_m_ = raw_ipd;
 
-            // Lateral offset: positive = camera is further outward than eye.
-            const float offset  = camera_separation_m_ * 0.5f - raw_ipd * 0.5f;
-            // Angular equivalent at nominal depth 0.7 m (hand-to-shoulder reach) —
-            // prioritises near-field interactions over distant objects.
-            const float delta   = std::atan2(offset, 0.7f);
-            config_.ipd_toe_delta_l = -delta;
-            config_.ipd_toe_delta_r =  delta;
+            ipd_toe_deltas(raw_ipd, camera_separation_m_,
+                           config_.ipd_toe_delta_l, config_.ipd_toe_delta_r);
 
+            // Lateral offset: positive = camera is further outward than eye.
+            const float offset = camera_separation_m_ * 0.5f - raw_ipd * 0.5f;
             PT_LOG_INFO("IPD correction: ipd={:.1f}mm cam_sep={:.1f}mm "
                         "offset={:.2f}mm delta={:.4f}rad",
                         raw_ipd * 1000.f,
                         camera_separation_m_ * 1000.f,
                         offset * 1000.f,
-                        delta);
+                        config_.ipd_toe_delta_r);
         }
     } else {
         config_.ipd_toe_delta_l = 0.f;
@@ -506,14 +504,16 @@ LayerSession::compose_layer(const XrFrameEndInfo* original) {
         const CameraId cam_id = (eye == 0) ? CameraId::Left : CameraId::Right;
         const CameraIntrinsics& intr = camera_->intrinsics(cam_id);
         const float zoom = config_.zoom_factor;
-        const float W_f  = static_cast<float>(w);
-        const float H_f  = static_cast<float>(h);
 
+        const EyeFov fov = fov_from_intrinsics(intr,
+                                               static_cast<int>(w),
+                                               static_cast<int>(h),
+                                               zoom);
         XrFovf cam_fov{};
-        cam_fov.angleLeft  = -std::atan(static_cast<float>(intr.cx)        * zoom / static_cast<float>(intr.fx));
-        cam_fov.angleRight =  std::atan((W_f - static_cast<float>(intr.cx)) * zoom / static_cast<float>(intr.fx));
-        cam_fov.angleUp    =  std::atan(static_cast<float>(intr.cy)        * zoom / static_cast<float>(intr.fy));
-        cam_fov.angleDown  = -std::atan((H_f - static_cast<float>(intr.cy)) * zoom / static_cast<float>(intr.fy));
+        cam_fov.angleLeft  = fov.angle_left;
+        cam_fov.angleRight = fov.angle_right;
+        cam_fov.angleUp    = fov.angle_up;
+        cam_fov.angleDown  = fov.angle_down;
 
         // Use the OpenXR eye pose captured at camera-frame-arrive time.
         // ATW corrects for the rotation delta between that snapshot and actual
