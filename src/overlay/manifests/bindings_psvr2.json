@@ -1,0 +1,20 @@
+{
+	"controller_type": "psvr2_controller",
+	"description": "Default PSVR2 Sense bindings for PSVR2 Passthrough",
+	"name": "PSVR2 Passthrough default bindings",
+	"bindings": {
+		"/actions/main": {
+			"sources": [
+				{
+					"path": "/user/hand/right/input/b",
+					"mode": "button",
+					"inputs": {
+						"long_press": {
+							"output": "/actions/main/in/toggle_passthrough"
+						}
+					}
+				}
+			]
+		}
+	}
+}

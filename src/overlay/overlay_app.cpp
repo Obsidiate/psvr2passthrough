@@ -4,7 +4,10 @@
 #include "fov.h"
 #include "frame.h"
 
+#include <windows.h>
+
 #include <cmath>
+#include <filesystem>
 #include <thread>
 #include <chrono>
 
@@ -15,11 +18,22 @@ namespace psvr2pt {
 namespace {
 constexpr char kOverlayKey[]  = "com.psvr2passthrough.overlay";
 constexpr char kOverlayName[] = "PSVR2 Passthrough";
+constexpr char kAppKey[]      = "com.psvr2passthrough.overlay";
 
 // Per-eye output resolution for the undistortion pass. Matches the camera
 // native height; width rounded to camera stride. Side-by-side target is 2x wide.
 constexpr UINT kEyeOutW = 1016;
 constexpr UINT kEyeOutH = 1016;
+
+// Directory containing the running exe — manifests are shipped next to it.
+std::filesystem::path exe_dir() {
+    wchar_t buf[MAX_PATH]{};
+    GetModuleFileNameW(nullptr, buf, MAX_PATH);
+    return std::filesystem::path(buf).parent_path();
+}
+
+std::string manifest_path()      { return (exe_dir() / "manifest.vrmanifest").string(); }
+std::string action_manifest_path() { return (exe_dir() / "actions.json").string(); }
 }  // namespace
 
 OverlayApp::OverlayApp()  = default;
@@ -30,6 +44,7 @@ bool OverlayApp::initialise() {
     if (!init_vr_())                return false;
     if (!init_camera_and_compositor_()) return false;
     apply_config_();
+    init_input_();
     return true;
 }
 
@@ -141,6 +156,68 @@ void OverlayApp::apply_config_() {
     // Reprojection is OpenXR-pose driven and irrelevant to the overlay; the
     // SteamVR compositor reprojects the head-locked quad for us.
     comp_cfg_.reprojection_enabled = false;
+
+    // Legacy (keyboard/XInput/DInput) binding shared with the layer.
+    poller_.set_binding(config_.passthrough_binding);
+}
+
+void OverlayApp::init_input_() {
+    // Register the action manifest so the toggle action and its default PSVR2
+    // bindings are available (and remappable in SteamVR's binding UI).
+    if (vr::VRInput()) {
+        const std::string am = action_manifest_path();
+        vr::EVRInputError ierr = vr::VRInput()->SetActionManifestPath(am.c_str());
+        if (ierr != vr::VRInputError_None) {
+            PT_LOG_WARN("SetActionManifestPath('{}') failed: {}", am, static_cast<int>(ierr));
+        } else {
+            vr::VRInput()->GetActionSetHandle("/actions/main", &action_set_main_);
+            vr::VRInput()->GetActionHandle("/actions/main/in/toggle_passthrough",
+                                           &action_toggle_);
+            PT_LOG_INFO("SteamVR input ready (action manifest loaded).");
+        }
+    }
+}
+
+bool OverlayApp::update_visibility_() {
+    // Debug force-on bypasses all input.
+    if (config_.force_passthrough_on) {
+        passthrough_visible_ = true;
+        return true;
+    }
+
+    // --- Legacy binding (keyboard/XInput/DInput), same state machine as layer ---
+    if (!config_.passthrough_binding.is_none()) {
+        const bool cur = poller_.poll();
+        if (config_.toggle_mode) {
+            if (cur && !prev_button_state_) passthrough_visible_ = !passthrough_visible_;
+        } else {
+            passthrough_visible_ = cur;
+        }
+        prev_button_state_ = cur;
+    }
+
+    // --- SteamVR input (IVRInput) ---
+    if (vr::VRInput() && action_set_main_ != vr::k_ulInvalidActionSetHandle) {
+        vr::VRActiveActionSet_t active{};
+        active.ulActionSet = action_set_main_;
+        vr::VRInput()->UpdateActionState(&active, sizeof(active), 1);
+
+        vr::InputDigitalActionData_t data{};
+        if (vr::VRInput()->GetDigitalActionData(
+                action_toggle_, &data, sizeof(data),
+                vr::k_ulInvalidInputValueHandle) == vr::VRInputError_None && data.bActive) {
+            // The toggle action is a momentary press; flip on the rising edge,
+            // matching the legacy toggle behaviour so both inputs feel the same.
+            if (data.bState && !prev_steamvr_state_) {
+                passthrough_visible_ = !passthrough_visible_;
+            }
+            prev_steamvr_state_ = data.bState;
+        } else {
+            prev_steamvr_state_ = false;
+        }
+    }
+
+    return passthrough_visible_;
 }
 
 bool OverlayApp::ensure_output_texture_() {
@@ -225,6 +302,17 @@ void OverlayApp::update_ipd_() {
 void OverlayApp::render_and_submit_() {
     if (!compositor_ready_ || !overlay_tex_) return;
 
+    // Visibility from legacy + SteamVR input. Hidden = nothing to render; just
+    // ensure the overlay is hidden and bail (cheap idle).
+    const bool visible = update_visibility_();
+    if (!visible) {
+        if (overlay_shown_) {
+            vr::VROverlay()->HideOverlay(overlay_handle_);
+            overlay_shown_ = false;
+        }
+        return;
+    }
+
     if (!placement_done_) update_overlay_placement_();
     update_ipd_();
 
@@ -253,8 +341,10 @@ void OverlayApp::render_and_submit_() {
     tex.eColorSpace = vr::ColorSpace_Linear;
     vr::VROverlay()->SetOverlayTexture(overlay_handle_, &tex);
 
-    // Always visible for now; toggle (show/hide) lands in Commit 4.
-    vr::VROverlay()->ShowOverlay(overlay_handle_);
+    if (!overlay_shown_) {
+        vr::VROverlay()->ShowOverlay(overlay_handle_);
+        overlay_shown_ = true;
+    }
 }
 
 void OverlayApp::pump_vr_events_() {
@@ -283,6 +373,65 @@ void OverlayApp::run() {
         render_and_submit_();
     }
     PT_LOG_INFO("Overlay run loop exited.");
+}
+
+// ---------------------------------------------------------------------------
+// CLI registration: install the app manifest with SteamVR and set autolaunch so
+// the overlay starts with SteamVR. Uses a transient Utility-mode VR session.
+// ---------------------------------------------------------------------------
+
+namespace {
+struct ScopedVR {
+    bool ok = false;
+    ScopedVR() {
+        vr::EVRInitError e = vr::VRInitError_None;
+        vr::VR_Init(&e, vr::VRApplication_Utility);
+        ok = (e == vr::VRInitError_None);
+        if (!ok) {
+            PT_LOG_ERROR("VR_Init(Utility) failed: {}",
+                         vr::VR_GetVRInitErrorAsEnglishDescription(e));
+        }
+    }
+    ~ScopedVR() { if (ok) vr::VR_Shutdown(); }
+};
+}  // namespace
+
+int register_application() {
+    ScopedVR vr_session;
+    if (!vr_session.ok || !vr::VRApplications()) return 1;
+
+    const std::string mpath = manifest_path();
+    vr::EVRApplicationError aerr =
+        vr::VRApplications()->AddApplicationManifest(mpath.c_str());
+    if (aerr != vr::VRApplicationError_None) {
+        PT_LOG_ERROR("AddApplicationManifest('{}') failed: {}", mpath,
+                     vr::VRApplications()->GetApplicationsErrorNameFromEnum(aerr));
+        return 1;
+    }
+    aerr = vr::VRApplications()->SetApplicationAutoLaunch(kAppKey, true);
+    if (aerr != vr::VRApplicationError_None) {
+        PT_LOG_ERROR("SetApplicationAutoLaunch(true) failed: {}",
+                     vr::VRApplications()->GetApplicationsErrorNameFromEnum(aerr));
+        return 1;
+    }
+    PT_LOG_INFO("Registered with SteamVR and enabled autolaunch ({}).", mpath);
+    return 0;
+}
+
+int unregister_application() {
+    ScopedVR vr_session;
+    if (!vr_session.ok || !vr::VRApplications()) return 1;
+
+    vr::VRApplications()->SetApplicationAutoLaunch(kAppKey, false);
+    const std::string mpath = manifest_path();
+    vr::EVRApplicationError aerr =
+        vr::VRApplications()->RemoveApplicationManifest(mpath.c_str());
+    if (aerr != vr::VRApplicationError_None) {
+        PT_LOG_WARN("RemoveApplicationManifest('{}') returned: {}", mpath,
+                    vr::VRApplications()->GetApplicationsErrorNameFromEnum(aerr));
+    }
+    PT_LOG_INFO("Unregistered from SteamVR autolaunch.");
+    return 0;
 }
 
 void OverlayApp::shutdown() {

@@ -1,0 +1,27 @@
+{
+	"default_bindings": [
+		{
+			"controller_type": "psvr2_controller",
+			"binding_url": "bindings_psvr2.json"
+		}
+	],
+	"actions": [
+		{
+			"name": "/actions/main/in/toggle_passthrough",
+			"type": "boolean"
+		}
+	],
+	"action_sets": [
+		{
+			"name": "/actions/main",
+			"usage": "leftright"
+		}
+	],
+	"localization": [
+		{
+			"language_tag": "en_US",
+			"/actions/main": "PSVR2 Passthrough",
+			"/actions/main/in/toggle_passthrough": "Toggle Passthrough"
+		}
+	]
+}

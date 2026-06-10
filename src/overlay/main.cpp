@@ -34,11 +34,9 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR lpCmdLine, int) {
     const CliAction action = parse_cli(lpCmdLine ? lpCmdLine : L"");
     switch (action) {
         case CliAction::Register:
-            PT_LOG_INFO("--register requested (implemented in Commit 4).");
-            return 0;
+            return register_application();
         case CliAction::Unregister:
-            PT_LOG_INFO("--unregister requested (implemented in Commit 4).");
-            return 0;
+            return unregister_application();
         case CliAction::Run:
             break;
     }

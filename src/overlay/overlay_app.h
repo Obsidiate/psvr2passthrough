@@ -9,9 +9,18 @@
 #include "config.h"
 #include "compositor.h"
 #include "camera_source.h"
+#include "input_binding.h"
 #include "frame.h"
 
+#include <string>
+
 namespace psvr2pt {
+
+// CLI registration helpers (manifest + autolaunch). Defined in overlay_app.cpp,
+// callable without constructing an OverlayApp (no D3D/VR needed beyond VR_Init).
+// Return 0 on success.
+int register_application();
+int unregister_application();
 
 // Standalone OpenVR overlay application. Owns its own D3D11 device (unlike the
 // layer, which borrows the game's), drives the shared CameraSource + Compositor
@@ -47,6 +56,8 @@ private:
     bool init_camera_and_compositor_();
 
     void apply_config_();            // disk Config -> CompositorConfig + geometry
+    void init_input_();              // IVRInput action set + legacy BindingPoller
+    bool update_visibility_();       // legacy + SteamVR input -> show/hide; returns visible
     void update_overlay_placement_(); // head-locked transform + FOV-derived width
     void update_ipd_();              // live IPD -> ipd_toe_deltas, rebuild on change
     void render_and_submit_();       // one frame: camera -> compositor -> overlay
@@ -66,6 +77,10 @@ private:
     vr::IVRSystem*       vr_system_  = nullptr;
     vr::VROverlayHandle_t overlay_handle_ = vr::k_ulOverlayHandleInvalid;
 
+    // SteamVR input (IVRInput) action handles.
+    vr::VRActionSetHandle_t action_set_main_ = vr::k_ulInvalidActionSetHandle;
+    vr::VRActionHandle_t    action_toggle_   = vr::k_ulInvalidActionHandle;
+
     // --- shared core ---
     std::unique_ptr<CameraSource> camera_;
     std::unique_ptr<Compositor>   compositor_;
@@ -80,6 +95,13 @@ private:
     // Live IPD tracking (mirrors the layer's >0.5mm rebuild threshold).
     float last_ipd_m_ = -1.f;   // sentinel: forces first update
     float camera_separation_m_ = 0.079f;
+
+    // --- input / visibility ---
+    BindingPoller poller_;                  // legacy keyboard/XInput/DInput
+    bool passthrough_visible_ = false;      // starts hidden
+    bool prev_button_state_   = false;      // legacy edge detection (toggle mode)
+    bool prev_steamvr_state_  = false;      // SteamVR action edge detection
+    bool overlay_shown_       = false;      // tracks Show/HideOverlay to avoid churn
 
     bool compositor_ready_ = false;
     bool placement_done_   = false;   // transform/width set once after init

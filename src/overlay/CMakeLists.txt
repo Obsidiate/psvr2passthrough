@@ -43,3 +43,19 @@ target_compile_definitions(PSVR2PassthroughOverlay
 set_target_properties(PSVR2PassthroughOverlay PROPERTIES
     OUTPUT_NAME "PSVR2PassthroughOverlay"
 )
+
+# Ship the SteamVR app manifest + IVRInput action/binding JSON next to the exe.
+# --register passes SteamVR an absolute path resolved from the running exe, so
+# the manifests must live alongside it (build tree and release zip alike).
+set(OVERLAY_MANIFESTS
+    ${CMAKE_CURRENT_SOURCE_DIR}/manifests/manifest.vrmanifest
+    ${CMAKE_CURRENT_SOURCE_DIR}/manifests/actions.json
+    ${CMAKE_CURRENT_SOURCE_DIR}/manifests/bindings_psvr2.json
+)
+foreach(_m ${OVERLAY_MANIFESTS})
+    add_custom_command(TARGET PSVR2PassthroughOverlay POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${_m} $<TARGET_FILE_DIR:PSVR2PassthroughOverlay>
+        COMMENT "Copying overlay manifest: ${_m}"
+        VERBATIM)
+endforeach()

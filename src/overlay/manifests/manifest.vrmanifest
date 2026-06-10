@@ -1,0 +1,17 @@
+{
+	"source": "builtin",
+	"applications": [
+		{
+			"app_key": "com.psvr2passthrough.overlay",
+			"launch_type": "binary",
+			"binary_path_windows": "PSVR2PassthroughOverlay.exe",
+			"is_dashboard_overlay": true,
+			"strings": {
+				"en_us": {
+					"name": "PSVR2 Passthrough",
+					"description": "Real-time PSVR2 camera passthrough overlay for SteamVR games, including native OpenVR titles."
+				}
+			}
+		}
+	]
+}
